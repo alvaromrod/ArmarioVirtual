@@ -5,22 +5,22 @@ package com.pep1lo.armariovirtual.data
  */
 object DataSource {
 
-    val seasons = listOf("Invierno", "Verano", "Entretiempo")
-    val styles = listOf("Básico", "Boho", "Preppy")
+    // --- INICIO DE LA MODIFICACIÓN: Listas actualizadas para usar Enums ---
+    val seasons = Season.values().toList()
+    val styles = Style.values().toList()
+    val categories = Category.values().toList()
+    // --- FIN DE LA MODIFICACIÓN ---
 
-    // --- INICIO DE LA ACTUALIZACIÓN ---
     val neutralColors = listOf("Negro", "Blanco", "Gris", "Beige", "Azul Marino", "Marrón")
     val accentColors = listOf("Rojo", "Azul", "Verde", "Amarillo", "Naranja", "Rosa", "Morado")
     val allColors = neutralColors + accentColors
-    // --- FIN DE LA ACTUALIZACIÓN ---
 
-    val categories = listOf("Exterior", "Intermedio", "Superior", "Inferior", "Completo")
-
+    // --- INICIO DE LA MODIFICACIÓN: Mapa actualizado para usar Enums ---
     val categoryItemMap = mapOf(
-        "Exterior" to listOf("Abrigo", "Chaqueta"),
-        "Intermedio" to listOf("Jersey", "Cardigan", "Americana", "Camisa"),
-        "Superior" to listOf("Top", "Camiseta", "Camisa"),
-        "Inferior" to listOf("Pantalones", "Falda", "Tejanos"),
-        "Completo" to listOf("Vestido", "Mono")
+        Category.EXTERIOR to listOf("Abrigo", "Chaqueta", "Jersey", "Cardigan", "Americana", "Camisa"),
+        Category.SUPERIOR to listOf("Top", "Camiseta", "Camisa"),
+        Category.INFERIOR to listOf("Pantalones", "Falda", "Tejanos"),
+        Category.COMPLETO to listOf("Vestido", "Mono")
     )
+    // --- FIN DE LA MODIFICACIÓN ---
 }

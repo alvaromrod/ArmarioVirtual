@@ -26,8 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.lifecycle.lifecycleScope
 import coil.compose.rememberAsyncImagePainter
-import com.pep1lo.armariovirtual.data.ClothingItem
-import com.pep1lo.armariovirtual.data.DataSource
+import com.pep1lo.armariovirtual.data.*
 import com.pep1lo.armariovirtual.ui.ViewModelFactory
 import com.pep1lo.armariovirtual.ui.WardrobeViewModel
 import com.pep1lo.armariovirtual.ui.theme.ArmarioVirtualTheme
@@ -56,9 +55,8 @@ class AddClothingItemActivity : ComponentActivity() {
 
     private val takePicture = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
-            val currentTempUri = tempImageUri
-            if (currentTempUri != null) {
-                imageUri = currentTempUri
+            tempImageUri?.let {
+                imageUri = it
             }
         }
     }
@@ -66,9 +64,8 @@ class AddClothingItemActivity : ComponentActivity() {
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) {
             tempImageUri = getTmpFileUri()
-            val currentTempUri = tempImageUri
-            if (currentTempUri != null) {
-                takePicture.launch(currentTempUri)
+            tempImageUri?.let {
+                takePicture.launch(it)
             }
         }
     }
@@ -140,11 +137,11 @@ fun AddClothingItemScreen(
     onLaunchGallery: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
-    var selectedCategory by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf<Category?>(null) }
     var selectedItem by remember { mutableStateOf("") }
     var selectedColor by remember { mutableStateOf("") }
-    var selectedStyle by remember { mutableStateOf("") }
-    var selectedSeason by remember { mutableStateOf("") }
+    var selectedStyle by remember { mutableStateOf<Style?>(null) }
+    var selectedSeason by remember { mutableStateOf<Season?>(null) }
     var availableItems by remember { mutableStateOf(listOf<String>()) }
     var showChoiceDialog by remember { mutableStateOf(false) }
 
@@ -163,8 +160,8 @@ fun AddClothingItemScreen(
         }
     }
 
-    val isButtonEnabled = name.isNotBlank() && selectedCategory.isNotBlank() && selectedItem.isNotBlank() &&
-            selectedStyle.isNotBlank() && selectedSeason.isNotBlank()
+    val isButtonEnabled = name.isNotBlank() && selectedCategory != null && selectedItem.isNotBlank() &&
+            selectedStyle != null && selectedSeason != null && imageUri != null
 
     if (showChoiceDialog) {
         AlertDialog(
@@ -227,15 +224,20 @@ fun AddClothingItemScreen(
                 label = { Text("Nombre o Descripción") },
                 modifier = Modifier.fillMaxWidth()
             )
-            DropdownMenu(
+            EnumDropdownMenu(
                 label = "Categoría",
                 options = DataSource.categories,
                 selectedOption = selectedCategory,
                 onOptionSelected = { category ->
                     selectedCategory = category
-                    availableItems = DataSource.categoryItemMap[category] ?: emptyList()
+                    availableItems = if (category != null) {
+                        DataSource.categoryItemMap[category] ?: emptyList()
+                    } else {
+                        emptyList()
+                    }
                     selectedItem = ""
-                }
+                },
+                optionToString = { it.displayName }
             )
             DropdownMenu(
                 label = "Item",
@@ -250,17 +252,19 @@ fun AddClothingItemScreen(
                 selectedOption = selectedColor,
                 onOptionSelected = { selectedColor = it }
             )
-            DropdownMenu(
+            EnumDropdownMenu(
                 label = "Estilo",
                 options = DataSource.styles,
                 selectedOption = selectedStyle,
-                onOptionSelected = { selectedStyle = it }
+                onOptionSelected = { selectedStyle = it },
+                optionToString = { it.displayName }
             )
-            DropdownMenu(
+            EnumDropdownMenu(
                 label = "Temporada",
                 options = DataSource.seasons,
                 selectedOption = selectedSeason,
-                onOptionSelected = { selectedSeason = it }
+                onOptionSelected = { selectedSeason = it },
+                optionToString = { it.displayName }
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -270,11 +274,11 @@ fun AddClothingItemScreen(
                     val itemToSave = ClothingItem(
                         id = editingItem?.id ?: 0,
                         name = name,
-                        category = selectedCategory,
+                        category = selectedCategory!!,
                         features = selectedItem,
                         color = selectedColor,
-                        style = selectedStyle,
-                        season = selectedSeason,
+                        style = selectedStyle!!,
+                        season = selectedSeason!!,
                         imageUri = imageUri?.toString() ?: "",
                         usageCount = editingItem?.usageCount ?: 0,
                         isAvailable = editingItem?.isAvailable ?: true
@@ -284,8 +288,9 @@ fun AddClothingItemScreen(
                 enabled = isButtonEnabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Guardar Cambios")
+                Text(if (editingItem != null) "Guardar Cambios" else "Añadir Prenda")
             }
         }
     }
 }
+

@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.pep1lo.armariovirtual.data.Category
 import com.pep1lo.armariovirtual.data.ClothingItem
 import com.pep1lo.armariovirtual.data.OutfitWithItems
 import com.pep1lo.armariovirtual.ui.ClothingCategoryRow
@@ -89,10 +90,10 @@ fun EditOutfitScreen(
     LaunchedEffect(editingOutfit) {
         editingOutfit?.items?.forEach { item ->
             when (item.category) {
-                "Superior" -> selectedTop = item
-                "Inferior" -> selectedBottom = item
-                "Completo" -> selectedFullBody = item
-                "Exterior" -> selectedCoat = item
+                Category.SUPERIOR -> selectedTop = item
+                Category.INFERIOR -> selectedBottom = item
+                Category.COMPLETO -> selectedFullBody = item
+                Category.EXTERIOR -> selectedCoat = item
             }
             if (item.features == "Zapatos") {
                 selectedShoes = item
@@ -106,7 +107,7 @@ fun EditOutfitScreen(
         listOfNotNull(selectedFullBody ?: selectedTop, selectedBottom, selectedCoat, selectedShoes)
     }
 
-    val isSaveEnabled = (selectedTop != null || selectedFullBody != null)
+    val isSaveEnabled = (selectedTop != null || selectedFullBody != null) && selectedShoes != null
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Editar Conjunto") }) },
@@ -133,7 +134,7 @@ fun EditOutfitScreen(
         ) {
             ClothingCategoryRow(
                 title = "Prendas Completas",
-                items = groupedItems["Completo"] ?: emptyList(),
+                items = groupedItems[Category.COMPLETO] ?: emptyList(),
                 selectedItem = selectedFullBody,
                 onItemSelected = { item ->
                     selectedFullBody = if (selectedFullBody?.id == item.id) null else item
@@ -145,7 +146,7 @@ fun EditOutfitScreen(
             )
             ClothingCategoryRow(
                 title = "Prendas Superiores",
-                items = groupedItems["Superior"] ?: emptyList(),
+                items = groupedItems[Category.SUPERIOR] ?: emptyList(),
                 selectedItem = selectedTop,
                 onItemSelected = { item ->
                     selectedTop = if (selectedTop?.id == item.id) null else item
@@ -154,7 +155,7 @@ fun EditOutfitScreen(
             )
             ClothingCategoryRow(
                 title = "Prendas Inferiores",
-                items = groupedItems["Inferior"] ?: emptyList(),
+                items = groupedItems[Category.INFERIOR] ?: emptyList(),
                 selectedItem = selectedBottom,
                 onItemSelected = { item ->
                     selectedBottom = if (selectedBottom?.id == item.id) null else item
@@ -163,7 +164,7 @@ fun EditOutfitScreen(
             )
             ClothingCategoryRow(
                 title = "Abrigos y Chaquetas",
-                items = groupedItems["Exterior"] ?: emptyList(),
+                items = groupedItems[Category.EXTERIOR] ?: emptyList(),
                 selectedItem = selectedCoat,
                 onItemSelected = { item -> selectedCoat = if (selectedCoat?.id == item.id) null else item }
             )
@@ -176,3 +177,4 @@ fun EditOutfitScreen(
         }
     }
 }
+

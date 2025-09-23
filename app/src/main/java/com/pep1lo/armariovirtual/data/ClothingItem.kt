@@ -10,23 +10,23 @@ data class ClothingItem(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,
 
-    val name: String, // "Camisa", "Pantalón", etc.
+    val name: String,
 
-    val category: String, // "Superior", "Inferior", etc.
+    // --- INICIO DE LA MODIFICACIÓN: Tipos cambiados a Enums ---
+    val category: Category,
+    val style: Style,
+    val season: Season,
+    // --- FIN DE LA MODIFICACIÓN ---
 
-    val secondaryCategory: String? = null, // Para prendas como vestidos ("Inferior")
+    val secondaryCategory: String? = null,
 
-    val features: String, // Descripción de texto libre
+    val features: String,
 
     val color: String,
 
-    val style: String, // "Básico", "Boho", etc.
+    val isAvailable: Boolean = true,
 
-    val season: String, // "Invierno", "Verano", etc.
+    val usageCount: Int = 0,
 
-    val isAvailable: Boolean = true, // true si está disponible, false si está en la lavadora, etc.
-
-    val usageCount: Int = 0, // Contador de veces que se ha usado
-
-    val imageUri: String // URI de la imagen guardada en el teléfono
+    val imageUri: String
 )

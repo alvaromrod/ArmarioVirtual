@@ -33,14 +33,15 @@ class SettingsActivity : ComponentActivity() {
         )
     }
 
-    // Lanzador para crear el archivo de backup
+    private val json = Json { ignoreUnknownKeys = true }
+
     private val createDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.CreateDocument("application/json")
     ) { uri: Uri? ->
         uri?.let {
             lifecycleScope.launch {
                 val backupData = viewModel.getBackupData().first()
-                val jsonString = Json.encodeToString(backupData)
+                val jsonString = json.encodeToString(backupData)
                 try {
                     contentResolver.openOutputStream(it)?.use { outputStream ->
                         outputStream.write(jsonString.toByteArray())
@@ -53,7 +54,6 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
-    // Lanzador para abrir un archivo de backup
     private val openDocumentLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
@@ -62,12 +62,23 @@ class SettingsActivity : ComponentActivity() {
                 val jsonString = contentResolver.openInputStream(it)?.use { inputStream ->
                     BufferedReader(InputStreamReader(inputStream)).readText()
                 }
+
                 if (jsonString != null) {
-                    val backupData = Json.decodeFromString<BackupData>(jsonString)
+                    // --- INICIO DE LA MODIFICACIÓN ---
+                    // Pre-procesamos el texto del JSON para corregir categorías antiguas
+                    // antes de intentar decodificarlo.
+                    val cleanedJsonString = jsonString
+                        .replace("\"category\": \"Intermedio\"", "\"category\": \"Exterior\"")
+                        .replace("\"category\": \"Zapatos\"", "\"category\": \"Exterior\"")
+                    // --- FIN DE LA MODIFICACIÓN ---
+
+                    val backupData = json.decodeFromString<BackupData>(cleanedJsonString)
                     viewModel.restoreDataFromBackup(backupData)
                     Toast.makeText(this@SettingsActivity, "Datos restaurados con éxito", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                // Añadimos un log para poder ver el error exacto en Logcat si vuelve a fallar
+                android.util.Log.e("SettingsActivity", "Error al importar backup", e)
                 Toast.makeText(this@SettingsActivity, "Error: Archivo de backup inválido", Toast.LENGTH_SHORT).show()
             }
         }
@@ -79,7 +90,6 @@ class SettingsActivity : ComponentActivity() {
             ArmarioVirtualTheme {
                 SettingsScreen(
                     onExportClick = {
-                        // Sugerimos un nombre de archivo
                         createDocumentLauncher.launch("armario_virtual_backup.json")
                     },
                     onImportClick = {
@@ -122,3 +132,4 @@ fun SettingsScreen(onExportClick: () -> Unit, onImportClick: () -> Unit) {
         }
     }
 }
+

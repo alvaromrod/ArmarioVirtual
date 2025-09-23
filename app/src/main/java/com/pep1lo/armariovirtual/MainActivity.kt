@@ -30,10 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import coil.compose.rememberAsyncImagePainter
-import com.pep1lo.armariovirtual.data.ClothingItem
-import com.pep1lo.armariovirtual.data.DataSource
-import com.pep1lo.armariovirtual.data.OutfitWithItems
-import com.pep1lo.armariovirtual.data.WardrobeStats
+import com.pep1lo.armariovirtual.data.*
 import com.pep1lo.armariovirtual.ui.ViewModelFactory
 import com.pep1lo.armariovirtual.ui.WardrobeViewModel
 import com.pep1lo.armariovirtual.ui.theme.ArmarioVirtualTheme
@@ -75,7 +72,7 @@ fun MainScreen(viewModel: WardrobeViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) }, // <-- CAMBIO REALIZADO AQUÍ
+                title = { Text(stringResource(R.string.app_name)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.primary,
@@ -228,46 +225,47 @@ fun OutfitsScreen(
 ) {
     val context = LocalContext.current
 
-    var selectedSeason by remember { mutableStateOf("Todas") }
-    var selectedStyle by remember { mutableStateOf("Todos") }
+    var selectedSeason by remember { mutableStateOf<Season?>(null) }
+    var selectedStyle by remember { mutableStateOf<Style?>(null) }
 
-    // Filtramos los outfits basándonos en si alguna de sus prendas coincide con los filtros
     val filteredOutfits = savedOutfits.filter { outfitWithItems ->
-        val matchesSeason = selectedSeason == "Todas" || outfitWithItems.items.any { it.season == selectedSeason }
-        val matchesStyle = selectedStyle == "Todos" || outfitWithItems.items.any { it.style == selectedStyle }
+        val matchesSeason = selectedSeason == null || outfitWithItems.items.any { it.season == selectedSeason }
+        val matchesStyle = selectedStyle == null || outfitWithItems.items.any { it.style == selectedStyle }
         matchesSeason && matchesStyle
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // --- INICIO DE LA UI DE FILTROS PARA OUTFITS ---
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
-                    DropdownMenu(
+                    EnumDropdownMenu(
                         label = "Temporada",
-                        options = listOf("Todas") + DataSource.seasons,
+                        options = DataSource.seasons,
                         selectedOption = selectedSeason,
-                        onOptionSelected = { selectedSeason = it }
+                        onOptionSelected = { selectedSeason = it },
+                        optionToString = { it.displayName },
+                        allowNull = true
                     )
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    DropdownMenu(
+                    EnumDropdownMenu(
                         label = "Estilo",
-                        options = listOf("Todos") + DataSource.styles,
+                        options = DataSource.styles,
                         selectedOption = selectedStyle,
-                        onOptionSelected = { selectedStyle = it }
+                        onOptionSelected = { selectedStyle = it },
+                        optionToString = { it.displayName },
+                        allowNull = true
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Button(onClick = {
-                selectedSeason = "Todas"
-                selectedStyle = "Todos"
+                selectedSeason = null
+                selectedStyle = null
             }, modifier = Modifier.fillMaxWidth()) {
                 Text("Limpiar Filtros")
             }
         }
-        // --- FIN DE LA UI DE FILTROS ---
 
         Divider()
 
@@ -347,8 +345,8 @@ fun OutfitCard(
 
 @Composable
 fun GeneratorScreen(viewModel: WardrobeViewModel) {
-    var selectedSeason by remember { mutableStateOf("") }
-    var selectedStyle by remember { mutableStateOf("") }
+    var selectedSeason by remember { mutableStateOf<Season?>(null) }
+    var selectedStyle by remember { mutableStateOf<Style?>(null) }
     val generatedOutfit by viewModel.generatedOutfit.collectAsState()
 
     Column(
@@ -358,23 +356,29 @@ fun GeneratorScreen(viewModel: WardrobeViewModel) {
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        DropdownMenu(
+        EnumDropdownMenu(
             label = "Temporada",
             options = DataSource.seasons,
             selectedOption = selectedSeason,
-            onOptionSelected = { selectedSeason = it }
+            onOptionSelected = { selectedSeason = it },
+            optionToString = { it.displayName }
         )
         Spacer(modifier = Modifier.height(8.dp))
-        DropdownMenu(
+        EnumDropdownMenu(
             label = "Estilo",
             options = DataSource.styles,
             selectedOption = selectedStyle,
-            onOptionSelected = { selectedStyle = it }
+            onOptionSelected = { selectedStyle = it },
+            optionToString = { it.displayName }
         )
         Spacer(modifier = Modifier.height(16.dp))
         Button(
-            onClick = { viewModel.generateOutfit(selectedSeason, selectedStyle) },
-            enabled = selectedSeason.isNotBlank() && selectedStyle.isNotBlank(),
+            onClick = {
+                if(selectedSeason != null && selectedStyle != null) {
+                    viewModel.generateOutfit(selectedSeason!!, selectedStyle!!)
+                }
+            },
+            enabled = selectedSeason != null && selectedStyle != null,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("Generar Outfit")
@@ -405,48 +409,54 @@ fun WardrobeScreenContent(
 ) {
     val context = LocalContext.current
 
-    var selectedCategory by remember { mutableStateOf("Todas") }
-    var selectedSeason by remember { mutableStateOf("Todas") }
-    var selectedStyle by remember { mutableStateOf("Todos") }
+    var selectedCategory by remember { mutableStateOf<Category?>(null) }
+    var selectedSeason by remember { mutableStateOf<Season?>(null) }
+    var selectedStyle by remember { mutableStateOf<Style?>(null) }
 
     val filteredItems = items.filter { item ->
-        (selectedCategory == "Todas" || item.category == selectedCategory) &&
-                (selectedSeason == "Todas" || item.season == selectedSeason) &&
-                (selectedStyle == "Todos" || item.style == selectedStyle)
+        (selectedCategory == null || item.category == selectedCategory) &&
+                (selectedSeason == null || item.season == selectedSeason) &&
+                (selectedStyle == null || item.style == selectedStyle)
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(modifier = Modifier.weight(1f)) {
-                    DropdownMenu(
+                    EnumDropdownMenu(
                         label = "Categoría",
-                        options = listOf("Todas") + DataSource.categories,
+                        options = DataSource.categories,
                         selectedOption = selectedCategory,
-                        onOptionSelected = { selectedCategory = it }
+                        onOptionSelected = { selectedCategory = it },
+                        optionToString = { it.displayName },
+                        allowNull = true
                     )
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    DropdownMenu(
+                    EnumDropdownMenu(
                         label = "Temporada",
-                        options = listOf("Todas") + DataSource.seasons,
+                        options = DataSource.seasons,
                         selectedOption = selectedSeason,
-                        onOptionSelected = { selectedSeason = it }
+                        onOptionSelected = { selectedSeason = it },
+                        optionToString = { it.displayName },
+                        allowNull = true
                     )
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
-            DropdownMenu(
+            EnumDropdownMenu(
                 label = "Estilo",
-                options = listOf("Todos") + DataSource.styles,
+                options = DataSource.styles,
                 selectedOption = selectedStyle,
-                onOptionSelected = { selectedStyle = it }
+                onOptionSelected = { selectedStyle = it },
+                optionToString = { it.displayName },
+                allowNull = true
             )
             Spacer(modifier = Modifier.height(8.dp))
             Button(onClick = {
-                selectedCategory = "Todas"
-                selectedSeason = "Todas"
-                selectedStyle = "Todos"
+                selectedCategory = null
+                selectedSeason = null
+                selectedStyle = null
             }, modifier = Modifier.fillMaxWidth()) {
                 Text("Limpiar Filtros")
             }
@@ -518,7 +528,7 @@ fun ClothingCard(
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Text(
-                    text = "Categoría: ${item.category}",
+                    text = "Categoría: ${item.category.displayName}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -542,6 +552,62 @@ fun ClothingCard(
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T> EnumDropdownMenu(
+    label: String,
+    options: List<T>,
+    selectedOption: T?,
+    onOptionSelected: (T?) -> Unit,
+    optionToString: (T) -> String,
+    enabled: Boolean = true,
+    allowNull: Boolean = false
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { if (enabled) expanded = !expanded }
+    ) {
+        OutlinedTextField(
+            value = selectedOption?.let { optionToString(it) } ?: "",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            enabled = enabled
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            if (allowNull) {
+                DropdownMenuItem(
+                    text = { Text("Todos") },
+                    onClick = {
+                        onOptionSelected(null)
+                        expanded = false
+                    }
+                )
+            }
+            options.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(optionToString(option)) },
+                    onClick = {
+                        onOptionSelected(option)
+                        expanded = false
+                    }
+                )
             }
         }
     }
@@ -591,3 +657,4 @@ fun DropdownMenu(
         }
     }
 }
+

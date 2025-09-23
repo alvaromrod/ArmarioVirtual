@@ -4,12 +4,14 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 
 @Database(
     entities = [ClothingItem::class, Outfit::class, OutfitClothingLink::class],
-    version = 2,
+    version = 3, // <-- Incrementamos la versión de la DB por el cambio de tipos
     exportSchema = false
 )
+@TypeConverters(Converters::class) // <-- Añadimos la referencia a nuestros conversores
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun clothingItemDao(): ClothingItemDao

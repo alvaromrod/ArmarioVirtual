@@ -31,7 +31,8 @@ class WardrobeViewModel(
     val wardrobeStats: StateFlow<WardrobeStats> = allItems.map { items ->
         val top5 = items.filter { it.usageCount > 0 }.sortedByDescending { it.usageCount }.take(5)
         val colors = items.groupBy { it.color }.mapValues { it.value.size }
-        val styles = items.groupBy { it.style }.mapValues { it.value.size }
+        // Modificación: Agrupamos por el nombre visible del estilo (Enum)
+        val styles = items.groupBy { it.style.displayName }.mapValues { it.value.size }
         WardrobeStats(top5, colors, styles)
     }.stateIn(
         scope = viewModelScope,
@@ -159,35 +160,34 @@ class WardrobeViewModel(
         }
     }
 
-    fun generateOutfit(season: String, style: String) {
+    // --- INICIO DE LA MODIFICACIÓN: La función ahora recibe Enums ---
+    fun generateOutfit(season: Season, style: Style) {
         viewModelScope.launch {
             val allClothingItems = allItems.value.filter { it.isAvailable }
+
             val compatibleStyles = when (style) {
-                "Básico" -> listOf("Básico", "Preppy", "Boho")
-                "Preppy" -> listOf("Básico", "Preppy")
-                "Boho" -> listOf("Básico", "Boho")
-                else -> listOf(style)
+                Style.BASICO -> listOf(Style.BASICO, Style.PREPPY, Style.BOHO)
+                Style.PREPPY -> listOf(Style.BASICO, Style.PREPPY)
+                Style.BOHO -> listOf(Style.BASICO, Style.BOHO)
             }
 
-            // --- INICIO DE LA MODIFICACIÓN: Lógica de temporadas flexible ---
-            // Creamos una lista de temporadas válidas según la selección del usuario.
-            // Si se elige "Verano" o "Invierno", se incluyen también las prendas de "Entretiempo".
             val seasonsToInclude = when (season) {
-                "Verano" -> listOf("Verano", "Entretiempo")
-                "Invierno" -> listOf("Invierno", "Entretiempo")
-                else -> listOf(season) // Para "Entretiempo" y otros casos, solo se usa la temporada seleccionada.
+                Season.VERANO -> listOf(Season.VERANO, Season.ENTRETIEMPO)
+                Season.INVIERNO -> listOf(Season.INVIERNO, Season.ENTRETIEMPO)
+                Season.ENTRETIEMPO -> listOf(Season.ENTRETIEMPO)
             }
 
             val filteredItems = allClothingItems.filter {
                 it.season in seasonsToInclude && it.style in compatibleStyles
             }
+
+            val tops = filteredItems.filter { it.category == Category.SUPERIOR }
+            val bottoms = filteredItems.filter { it.category == Category.INFERIOR }
+            val fullBody = filteredItems.filter { it.category == Category.COMPLETO }
+            val shoes = allClothingItems.filter { it.features == "Zapatos" }
+            val coats = allClothingItems.filter { it.category == Category.EXTERIOR }
             // --- FIN DE LA MODIFICACIÓN ---
 
-            val tops = filteredItems.filter { it.category == "Superior" }
-            val bottoms = filteredItems.filter { it.category == "Inferior" }
-            val fullBody = filteredItems.filter { it.category == "Completo" }
-            val shoes = allClothingItems.filter { it.features == "Zapatos" }
-            val coats = allClothingItems.filter { it.category == "Exterior" }
             val finalOutfit = mutableListOf<ClothingItem>()
             if (fullBody.isNotEmpty() && (tops.isEmpty() || bottoms.isEmpty())) {
                 fullBody.randomOrNull()?.let { finalOutfit.add(it) }
@@ -213,7 +213,9 @@ class WardrobeViewModel(
             } else {
                 shoes.randomOrNull()?.let { finalOutfit.add(it) }
             }
-            if ((season == "Invierno" || season == "Entretiempo")) {
+            // --- INICIO DE LA MODIFICACIÓN: Comparación con Enum ---
+            if ((season == Season.INVIERNO || season == Season.ENTRETIEMPO)) {
+                // --- FIN DE LA MODIFICACIÓN ---
                 val neutralCoats = coats.filter { it.color in DataSource.neutralColors }
                 if (neutralCoats.isNotEmpty()) {
                     finalOutfit.add(neutralCoats.random())
@@ -225,3 +227,4 @@ class WardrobeViewModel(
         }
     }
 }
+
