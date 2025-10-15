@@ -1,5 +1,6 @@
 package com.pep1lo.armariovirtual.data
 
+import android.annotation.SuppressLint
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
@@ -9,6 +10,7 @@ import com.pep1lo.armariovirtual.data.Category
 import com.pep1lo.armariovirtual.data.Season
 import com.pep1lo.armariovirtual.data.Style
 
+@SuppressLint("UnsafeOptInUsageError")
 @Entity(tableName = "clothing_items")
 @Serializable
 data class ClothingItem(
@@ -23,7 +25,7 @@ data class ClothingItem(
     val season: Season = Season.ENTRETIEMPO,
     val imageUri: String? = null,
     val isAvailable: Boolean = true,
-    var wearCount: Int = 0,
-    val secondaryCategory: Category? = null
+    val secondaryCategory: Category? = null,
+    val usageCount: Int = 0,
 )
 

@@ -47,6 +47,6 @@ interface OutfitDao {
     suspend fun clearAllLinks()
 
     // --- NUEVA FUNCIÓN PARA RESETEAR ESTADÍSTICAS ---
-    @Query("UPDATE outfits SET wearCount = 0, lastWornDate = null")
+    @Query("UPDATE outfits SET usageCount = 0, lastWornDate = null")
     suspend fun resetWearCount()
 }

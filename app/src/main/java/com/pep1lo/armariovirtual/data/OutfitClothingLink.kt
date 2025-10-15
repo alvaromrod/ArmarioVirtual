@@ -1,10 +1,12 @@
 package com.pep1lo.armariovirtual.data
 
+import android.annotation.SuppressLint
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import kotlinx.serialization.Serializable
 
+@SuppressLint("UnsafeOptInUsageError")
 @Serializable
 @Entity(
     tableName = "outfit_clothing_link",

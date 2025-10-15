@@ -34,6 +34,6 @@ interface ClothingItemDao {
     suspend fun clearAllItems()
 
     // --- NUEVA FUNCIÓN PARA RESETEAR ESTADÍSTICAS ---
-    @Query("UPDATE clothing_items SET wearCount = 0")
+    @Query("UPDATE clothing_items SET usageCount = 0")
     suspend fun resetWearCount()
 }

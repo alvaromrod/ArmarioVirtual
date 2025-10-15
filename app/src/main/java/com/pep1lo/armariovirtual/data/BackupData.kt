@@ -1,8 +1,10 @@
 package com.pep1lo.armariovirtual.data
 
+import android.annotation.SuppressLint
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+@SuppressLint("UnsafeOptInUsageError")
 @Serializable
 data class BackupData(
     val clothingItems: List<ClothingItem>,

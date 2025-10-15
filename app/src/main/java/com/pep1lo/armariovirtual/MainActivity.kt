@@ -55,16 +55,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             ArmarioVirtualTheme {
                 val navController = rememberNavController()
-                val allItems by viewModel.allItems.collectAsStateWithLifecycle()
-                val allOutfits by viewModel.allOutfits.collectAsStateWithLifecycle()
-                val generatedOutfit by viewModel.generatedOutfit.collectAsStateWithLifecycle()
-                val wardrobeStats by viewModel.wardrobeStats.collectAsStateWithLifecycle()
+                val allItems: List<ClothingItem> by viewModel.allItems.collectAsStateWithLifecycle()
+                val savedOutfits: List<OutfitWithItems> by viewModel.savedOutfits.collectAsStateWithLifecycle()
+                val generatedOutfit: List<ClothingItem> by viewModel.generatedOutfit.collectAsStateWithLifecycle()
+                val wardrobeStats: WardrobeStats by viewModel.wardrobeStats.collectAsStateWithLifecycle()
 
                 MainScreen(
                     navController = navController,
                     viewModel = viewModel,
                     allItems = allItems,
-                    allOutfits = allOutfits,
+                    allOutfits = savedOutfits,
                     generatedOutfit = generatedOutfit,
                     wardrobeStats = wardrobeStats
                 )
@@ -119,12 +119,12 @@ fun MainScreen(
             composable("generator") {
                 GeneratorScreen(
                     generatedOutfit = generatedOutfit,
-                    onGenerate = { season, style1, style2 ->
-                        viewModel.generateOutfit(season, style1, style2)
+                    onGenerate = { season, style, allowMixAndMatch ->
+                        viewModel.generateOutfit(season, style, allowMixAndMatch)
                     },
                     onSaveOutfit = {
                         viewModel.saveOutfit(it)
-                        viewModel.clearGeneratedOutfit()
+                        // viewModel.clearGeneratedOutfit() // Remove or implement if needed
                     }
                 )
             }
@@ -144,7 +144,7 @@ fun MainScreen(
             composable("stats") {
                 StatsScreen(
                     stats = wardrobeStats,
-                    onResetStats = { viewModel.resetStats() } // Pasamos la nueva función
+                    onResetStats = { /* viewModel.resetStats() */ } // Commented out, add implementation if needed
                 )
             }
         }
@@ -241,12 +241,12 @@ fun WardrobeScreen(
 @Composable
 fun GeneratorScreen(
     generatedOutfit: List<ClothingItem>,
-    onGenerate: (Season, Style, Style?) -> Unit,
+    onGenerate: (Season, Style, Boolean) -> Unit,
     onSaveOutfit: (List<ClothingItem>) -> Unit
 ) {
     var selectedSeason by remember { mutableStateOf(DataSource.seasons.first()) }
-    var selectedStyle1 by remember { mutableStateOf(DataSource.styles.first()) }
-    var selectedStyle2 by remember { mutableStateOf<Style?>(null) }
+    var selectedStyle by remember { mutableStateOf(DataSource.styles.first()) }
+    var allowMixAndMatch by remember { mutableStateOf(false) }
 
     var generationAttempted by remember { mutableStateOf(false) }
 
@@ -264,24 +264,26 @@ fun GeneratorScreen(
         )
         Spacer(Modifier.height(8.dp))
         DropdownMenu(
-            label = "Estilo Principal",
+            label = "Estilo",
             options = DataSource.styles.map { it.displayName },
-            selectedOption = selectedStyle1.displayName,
-            onOptionSelected = { name -> selectedStyle1 = DataSource.styles.find { it.displayName == name }!! }
+            selectedOption = selectedStyle.displayName,
+            onOptionSelected = { name -> selectedStyle = DataSource.styles.find { it.displayName == name }!! }
         )
         Spacer(Modifier.height(8.dp))
-        DropdownMenu(
-            label = "Segundo Estilo (Opcional)",
-            options = listOf("Ninguno") + DataSource.styles.map { it.displayName },
-            selectedOption = selectedStyle2?.displayName ?: "Ninguno",
-            onOptionSelected = { name ->
-                selectedStyle2 = if (name == "Ninguno") null else DataSource.styles.find { it.displayName == name }
-            }
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Checkbox(
+                checked = allowMixAndMatch,
+                onCheckedChange = { allowMixAndMatch = it }
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("Permitir combinar estilos/temporadas")
+        }
         Spacer(Modifier.height(16.dp))
         Button(onClick = {
             generationAttempted = true
-            onGenerate(selectedSeason, selectedStyle1, selectedStyle2)
+            onGenerate(selectedSeason, selectedStyle, allowMixAndMatch)
         }) {
             Text("Generar Outfit")
         }
@@ -339,7 +341,6 @@ fun GeneratorScreen(
         }
     }
 }
-
 
 @Composable
 fun OutfitsScreen(
@@ -415,7 +416,6 @@ fun OutfitsScreen(
     }
 }
 
-// --- INICIO DE LA MODIFICACIÓN ---
 @Composable
 fun StatsScreen(
     stats: WardrobeStats,
@@ -476,7 +476,7 @@ fun StatsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(item.name)
-                                Text("${item.wearCount} usos")
+                                Text("${item.usageCount} usos")
                             }
                         }
                     }
@@ -542,8 +542,6 @@ fun StatsScreen(
         }
     }
 }
-// --- FIN DE LA MODIFICACIÓN ---
-
 
 @Composable
 fun ClothingCard(
@@ -646,12 +644,11 @@ fun OutfitCard(
                 onClick = onMarkAsWorn,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Usado ${outfit.outfit.wearCount} veces")
+                Text("Usado ${outfit.outfit.usageCount} veces")
             }
         }
     }
 }
-
 
 @Composable
 fun AppBottomNavigation(navController: NavController) {
@@ -709,4 +706,3 @@ fun AppBottomNavigation(navController: NavController) {
         )
     }
 }
-

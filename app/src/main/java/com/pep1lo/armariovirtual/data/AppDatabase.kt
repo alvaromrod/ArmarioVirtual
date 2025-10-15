@@ -8,7 +8,7 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [ClothingItem::class, Outfit::class, OutfitClothingLink::class],
-    version = 3, // <-- Incrementamos la versión de la DB por el cambio de tipos
+    version = 4, // <-- Incrementamos la versión de la DB por el cambio de tipos
     exportSchema = false
 )
 @TypeConverters(Converters::class) // <-- Añadimos la referencia a nuestros conversores

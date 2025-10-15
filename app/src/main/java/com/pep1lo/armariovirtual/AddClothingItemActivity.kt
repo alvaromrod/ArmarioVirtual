@@ -55,7 +55,8 @@ class AddClothingItemActivity : ComponentActivity() {
     private val takePictureLauncher = registerForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
             tempImageUri?.let { uri ->
-                viewModel.setEditingImageUri(uri.toString())
+                // We manage the imageUri in Compose, so set it via a lambda
+                imageUriCallback?.invoke(uri.toString())
             }
         }
     }
@@ -63,9 +64,12 @@ class AddClothingItemActivity : ComponentActivity() {
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let {
             contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            viewModel.setEditingImageUri(it.toString())
+            imageUriCallback?.invoke(it.toString())
         }
     }
+
+    // Mutable callback to update the image URI in Compose
+    private var imageUriCallback: ((String?) -> Unit)? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,22 +77,29 @@ class AddClothingItemActivity : ComponentActivity() {
 
         if (itemId != -1) {
             viewModel.getItemById(itemId)
-        } else {
-            viewModel.clearEditingItem()
         }
 
         setContent {
             ArmarioVirtualTheme {
-                val editingItem by viewModel.editingItem.collectAsState()
+                // Use currentItem instead of editingItem
+                val currentItem by viewModel.currentItem.collectAsState()
+
+                // Image URI is managed locally in Compose
+                var imageUri by remember { mutableStateOf(currentItem?.imageUri) }
+                // Provide callback to set from ActivityResult
+                imageUriCallback = { uri -> imageUri = uri }
 
                 AddClothingItemScreen(
-                    editingItem = editingItem,
+                    editingItem = currentItem,
+                    imageUri = imageUri,
+                    onImageUriChange = { imageUri = it },
                     onSaveItem = { item ->
                         lifecycleScope.launch {
+                            val itemWithImage = item.copy(imageUri = imageUri)
                             if (item.id == 0) {
-                                viewModel.insertItem(item)
+                                viewModel.insertItem(itemWithImage)
                             } else {
-                                viewModel.updateItem(item)
+                                viewModel.updateItem(itemWithImage)
                             }
                             finish()
                         }
@@ -119,6 +130,8 @@ class AddClothingItemActivity : ComponentActivity() {
 @Composable
 fun AddClothingItemScreen(
     editingItem: ClothingItem?,
+    imageUri: String?,
+    onImageUriChange: (String?) -> Unit,
     onSaveItem: (ClothingItem) -> Unit,
     onLaunchCamera: () -> Unit,
     onLaunchGallery: () -> Unit
@@ -130,15 +143,10 @@ fun AddClothingItemScreen(
     var selectedColor by remember(editingItem) { mutableStateOf(editingItem?.color ?: "") }
     var selectedStyle by remember(editingItem) { mutableStateOf(editingItem?.style) }
     var selectedSeason by remember(editingItem) { mutableStateOf(editingItem?.season) }
-    var imageUri by remember(editingItem) { mutableStateOf(editingItem?.imageUri) }
     var showImageDialog by remember { mutableStateOf(false) }
 
     val isFormValid = name.isNotBlank() && selectedCategory != null && selectedItemFeature.isNotBlank() &&
             selectedColor.isNotBlank() && selectedStyle != null && selectedSeason != null
-
-    LaunchedEffect(editingItem?.imageUri) {
-        imageUri = editingItem?.imageUri
-    }
 
     if (showImageDialog) {
         AlertDialog(
@@ -199,7 +207,7 @@ fun AddClothingItemScreen(
                     .clickable { showImageDialog = true },
                 contentAlignment = Alignment.Center
             ) {
-                if (imageUri != null) {
+                if (!imageUri.isNullOrEmpty()) {
                     Image(
                         painter = rememberAsyncImagePainter(model = imageUri),
                         contentDescription = "Prenda",
@@ -271,4 +279,3 @@ fun AddClothingItemScreen(
         }
     }
 }
-
