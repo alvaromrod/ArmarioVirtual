@@ -86,4 +86,8 @@ dependencies {
 
     // Serialización (JSON)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    // Coroutines (needed for Flow.first and suspend functions)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
