@@ -39,7 +39,8 @@ fun SelectableClothingItem(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Image(
-                painter = rememberAsyncImagePainter(model = if (item.imageUri.isNotEmpty()) Uri.parse(item.imageUri) else null),
+                // CORRECCIÓN: Se comprueba si el String es nulo o vacío de forma segura.
+                painter = rememberAsyncImagePainter(model = if (!item.imageUri.isNullOrEmpty()) Uri.parse(item.imageUri) else null),
                 contentDescription = item.name,
                 modifier = Modifier
                     .fillMaxWidth()

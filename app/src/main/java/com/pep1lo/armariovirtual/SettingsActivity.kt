@@ -48,7 +48,6 @@ class SettingsActivity : ComponentActivity() {
                     }
                     Toast.makeText(this@SettingsActivity, "Backup creado con éxito", Toast.LENGTH_SHORT).show()
                 } catch (e: Exception) {
-                    android.util.Log.e("SettingsActivity", "Error al crear backup", e)
                     Toast.makeText(this@SettingsActivity, "Error al crear el backup", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -65,16 +64,20 @@ class SettingsActivity : ComponentActivity() {
                 }
 
                 if (jsonString != null) {
-                    // Pre-procesamos el texto del JSON para corregir categorías antiguas antes de intentar decodificarlo.
+                    // --- INICIO DE LA MODIFICACIÓN ---
+                    // Pre-procesamos el texto del JSON para corregir categorías antiguas
+                    // antes de intentar decodificarlo.
                     val cleanedJsonString = jsonString
                         .replace("\"category\": \"Intermedio\"", "\"category\": \"Exterior\"")
                         .replace("\"category\": \"Zapatos\"", "\"category\": \"Exterior\"")
+                    // --- FIN DE LA MODIFICACIÓN ---
 
                     val backupData = json.decodeFromString<BackupData>(cleanedJsonString)
                     viewModel.restoreDataFromBackup(backupData)
                     Toast.makeText(this@SettingsActivity, "Datos restaurados con éxito", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
+                // Añadimos un log para poder ver el error exacto en Logcat si vuelve a fallar
                 android.util.Log.e("SettingsActivity", "Error al importar backup", e)
                 Toast.makeText(this@SettingsActivity, "Error: Archivo de backup inválido", Toast.LENGTH_SHORT).show()
             }
@@ -129,3 +132,4 @@ fun SettingsScreen(onExportClick: () -> Unit, onImportClick: () -> Unit) {
         }
     }
 }
+

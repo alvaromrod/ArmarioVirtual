@@ -81,25 +81,12 @@ fun EditOutfitScreen(
     editingOutfit: OutfitWithItems?,
     onUpdateOutfit: (List<ClothingItem>) -> Unit
 ) {
-    var selectedTop by remember { mutableStateOf<ClothingItem?>(null) }
-    var selectedBottom by remember { mutableStateOf<ClothingItem?>(null) }
-    var selectedFullBody by remember { mutableStateOf<ClothingItem?>(null) }
-    var selectedCoat by remember { mutableStateOf<ClothingItem?>(null) }
-    var selectedShoes by remember { mutableStateOf<ClothingItem?>(null) }
+    var selectedTop by remember(editingOutfit) { mutableStateOf(editingOutfit?.items?.find { it.category == Category.SUPERIOR }) }
+    var selectedBottom by remember(editingOutfit) { mutableStateOf(editingOutfit?.items?.find { it.category == Category.INFERIOR }) }
+    var selectedFullBody by remember(editingOutfit) { mutableStateOf(editingOutfit?.items?.find { it.category == Category.COMPLETO }) }
+    var selectedCoat by remember(editingOutfit) { mutableStateOf(editingOutfit?.items?.find { it.category == Category.EXTERIOR }) }
+    var selectedShoes by remember(editingOutfit) { mutableStateOf(editingOutfit?.items?.find { it.features == "Zapatos" }) }
 
-    LaunchedEffect(editingOutfit) {
-        editingOutfit?.items?.forEach { item ->
-            when (item.category) {
-                Category.SUPERIOR -> selectedTop = item
-                Category.INFERIOR -> selectedBottom = item
-                Category.COMPLETO -> selectedFullBody = item
-                Category.EXTERIOR -> selectedCoat = item
-            }
-            if (item.features == "Zapatos") {
-                selectedShoes = item
-            }
-        }
-    }
 
     val groupedItems = allItems.filter { it.isAvailable }.groupBy { it.category }
 
@@ -107,7 +94,7 @@ fun EditOutfitScreen(
         listOfNotNull(selectedFullBody ?: selectedTop, selectedBottom, selectedCoat, selectedShoes)
     }
 
-    val isSaveEnabled = (selectedTop != null || selectedFullBody != null) && selectedShoes != null
+    val isSaveEnabled = (selectedTop != null || selectedFullBody != null)
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Editar Conjunto") }) },
@@ -116,7 +103,9 @@ fun EditOutfitScreen(
                 Button(
                     onClick = { onUpdateOutfit(finalSelection) },
                     enabled = isSaveEnabled,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp)
                 ) {
                     Icon(Icons.Default.Save, contentDescription = "Guardar Cambios")
                     Spacer(modifier = Modifier.width(8.dp))
@@ -166,15 +155,14 @@ fun EditOutfitScreen(
                 title = "Abrigos y Chaquetas",
                 items = groupedItems[Category.EXTERIOR] ?: emptyList(),
                 selectedItem = selectedCoat,
-                onItemSelected = { item -> selectedCoat = if (selectedCoat?.id == item.id) null else item }
+                onItemSelected = { selectedCoat = if (selectedCoat?.id == it.id) null else it }
             )
             ClothingCategoryRow(
                 title = "Zapatos",
                 items = allItems.filter { it.features == "Zapatos" },
                 selectedItem = selectedShoes,
-                onItemSelected = { item -> selectedShoes = if (selectedShoes?.id == item.id) null else item }
+                onItemSelected = { selectedShoes = if (selectedShoes?.id == it.id) null else it }
             )
         }
     }
 }
-

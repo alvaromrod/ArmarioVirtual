@@ -2,12 +2,18 @@ package com.pep1lo.armariovirtual.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import kotlinx.serialization.Serializable
 
 @Serializable
 @Entity(
     tableName = "outfit_clothing_link",
     primaryKeys = ["outfitId", "clothingItemId"],
+    // CORRECCIÓN: Se añaden índices para mejorar el rendimiento y eliminar los warnings de compilación.
+    indices = [
+        Index(value = ["outfitId"]),
+        Index(value = ["clothingItemId"])
+    ],
     foreignKeys = [
         ForeignKey(
             entity = Outfit::class,

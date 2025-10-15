@@ -1,46 +1,45 @@
 package com.pep1lo.armariovirtual
 
 import android.content.Intent
-import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavController
 import androidx.navigation.NavHostController
-import androidx.navigation.compose.*
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import com.pep1lo.armariovirtual.data.*
+import com.pep1lo.armariovirtual.ui.DropdownMenu
 import com.pep1lo.armariovirtual.ui.ViewModelFactory
 import com.pep1lo.armariovirtual.ui.WardrobeViewModel
 import com.pep1lo.armariovirtual.ui.theme.ArmarioVirtualTheme
-
-sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
-    object Wardrobe : BottomNavItem("wardrobe", Icons.Default.Checkroom, "Armario")
-    object Generator : BottomNavItem("generator", Icons.Default.AutoAwesome, "Generador")
-    object Outfits : BottomNavItem("outfits", Icons.Default.Style, "Conjuntos")
-    object Stats : BottomNavItem("stats", Icons.Default.Analytics, "Estadísticas")
-}
 
 class MainActivity : ComponentActivity() {
 
@@ -55,7 +54,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             ArmarioVirtualTheme {
-                MainScreen(viewModel = viewModel)
+                val navController = rememberNavController()
+                val allItems by viewModel.allItems.collectAsStateWithLifecycle()
+                val allOutfits by viewModel.allOutfits.collectAsStateWithLifecycle()
+                val generatedOutfit by viewModel.generatedOutfit.collectAsStateWithLifecycle()
+                val wardrobeStats by viewModel.wardrobeStats.collectAsStateWithLifecycle()
+
+                MainScreen(
+                    navController = navController,
+                    viewModel = viewModel,
+                    allItems = allItems,
+                    allOutfits = allOutfits,
+                    generatedOutfit = generatedOutfit,
+                    wardrobeStats = wardrobeStats
+                )
             }
         }
     }
@@ -63,154 +75,266 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(viewModel: WardrobeViewModel) {
-    val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
+fun MainScreen(
+    navController: NavHostController,
+    viewModel: WardrobeViewModel,
+    allItems: List<ClothingItem>,
+    allOutfits: List<OutfitWithItems>,
+    generatedOutfit: List<ClothingItem>,
+    wardrobeStats: WardrobeStats
+) {
     val context = LocalContext.current
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.app_name)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.primary,
-                ),
+                title = { Text("El Armario de Sílvia") },
                 actions = {
-                    IconButton(onClick = {
-                        context.startActivity(Intent(context, SettingsActivity::class.java))
-                    }) {
+                    IconButton(onClick = { context.startActivity(Intent(context, SettingsActivity::class.java)) }) {
                         Icon(Icons.Default.Settings, contentDescription = "Ajustes")
                     }
                 }
             )
         },
-        bottomBar = {
-            AppBottomNavigation(navController = navController)
-        },
-        floatingActionButton = {
-            when (currentRoute) {
-                BottomNavItem.Wardrobe.route -> {
-                    FloatingActionButton(onClick = {
-                        context.startActivity(Intent(context, AddClothingItemActivity::class.java))
-                    }) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Añadir prenda")
+        bottomBar = { AppBottomNavigation(navController = navController) }
+    ) { innerPadding ->
+        NavHost(
+            navController = navController,
+            startDestination = "wardrobe",
+            modifier = Modifier.padding(innerPadding)
+        ) {
+            composable("wardrobe") {
+                WardrobeScreen(
+                    allItems = allItems,
+                    onDeleteItem = { viewModel.deleteItem(it) },
+                    onToggleAvailability = { viewModel.toggleAvailability(it) },
+                    onEditItem = {
+                        val intent = Intent(context, AddClothingItemActivity::class.java).apply {
+                            putExtra("ITEM_ID", it.id)
+                        }
+                        context.startActivity(intent)
                     }
+                )
+            }
+            composable("generator") {
+                GeneratorScreen(
+                    generatedOutfit = generatedOutfit,
+                    onGenerate = { season, style1, style2 ->
+                        viewModel.generateOutfit(season, style1, style2)
+                    },
+                    onSaveOutfit = {
+                        viewModel.saveOutfit(it)
+                        viewModel.clearGeneratedOutfit()
+                    }
+                )
+            }
+            composable("outfits") {
+                OutfitsScreen(
+                    allOutfits = allOutfits,
+                    onMarkAsWorn = { viewModel.markOutfitAsWorn(it) },
+                    onDeleteOutfit = { viewModel.deleteOutfit(it) },
+                    onEditOutfit = {
+                        val intent = Intent(context, EditOutfitActivity::class.java).apply {
+                            putExtra("OUTFIT_ID", it.outfit.id)
+                        }
+                        context.startActivity(intent)
+                    }
+                )
+            }
+            composable("stats") {
+                StatsScreen(
+                    stats = wardrobeStats,
+                    onResetStats = { viewModel.resetStats() } // Pasamos la nueva función
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun WardrobeScreen(
+    allItems: List<ClothingItem>,
+    onDeleteItem: (ClothingItem) -> Unit,
+    onToggleAvailability: (ClothingItem) -> Unit,
+    onEditItem: (ClothingItem) -> Unit
+) {
+    val context = LocalContext.current
+    var selectedCategory by remember { mutableStateOf<Category?>(null) }
+    var selectedSeason by remember { mutableStateOf<Season?>(null) }
+    var selectedStyle by remember { mutableStateOf<Style?>(null) }
+
+    val filteredItems = allItems.filter {
+        (selectedCategory == null || it.category == selectedCategory) &&
+                (selectedSeason == null || it.season == selectedSeason) &&
+                (selectedStyle == null || it.style == selectedStyle)
+    }
+
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { context.startActivity(Intent(context, AddClothingItemActivity::class.java)) }) {
+                Icon(Icons.Default.Add, contentDescription = "Añadir prenda")
+            }
+        }
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                DropdownMenu(
+                    modifier = Modifier.weight(1f),
+                    label = "Categoría",
+                    options = listOf("Todas") + DataSource.categories.map { it.displayName },
+                    selectedOption = selectedCategory?.displayName ?: "Todas",
+                    onOptionSelected = { name ->
+                        selectedCategory = if (name == "Todas") null else DataSource.categories.find { it.displayName == name }
+                    }
+                )
+                DropdownMenu(
+                    modifier = Modifier.weight(1f),
+                    label = "Temporada",
+                    options = listOf("Todas") + DataSource.seasons.map { it.displayName },
+                    selectedOption = selectedSeason?.displayName ?: "Todas",
+                    onOptionSelected = { name ->
+                        selectedSeason = if (name == "Todas") null else DataSource.seasons.find { it.displayName == name }
+                    }
+                )
+                DropdownMenu(
+                    modifier = Modifier.weight(1f),
+                    label = "Estilo",
+                    options = listOf("Todas") + DataSource.styles.map { it.displayName },
+                    selectedOption = selectedStyle?.displayName ?: "Todas",
+                    onOptionSelected = { name ->
+                        selectedStyle = if (name == "Todas") null else DataSource.styles.find { it.displayName == name }
+                    }
+                )
+            }
+
+            if (filteredItems.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No hay prendas que coincidan con los filtros.")
                 }
-                BottomNavItem.Outfits.route -> {
-                    FloatingActionButton(onClick = {
-                        context.startActivity(Intent(context, CreateOutfitActivity::class.java))
-                    }) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = "Crear conjunto")
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(minSize = 150.dp),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredItems, key = { it.id }) { item ->
+                        ClothingCard(
+                            item = item,
+                            onDelete = { onDeleteItem(item) },
+                            onToggleAvailability = { onToggleAvailability(item) },
+                            onClick = { onEditItem(item) }
+                        )
                     }
                 }
             }
         }
-    ) { innerPadding ->
-        AppNavHost(
-            navController = navController,
-            viewModel = viewModel,
-            modifier = Modifier.padding(innerPadding)
-        )
     }
 }
 
 @Composable
-fun AppBottomNavigation(navController: NavHostController) {
-    val items = listOf(BottomNavItem.Wardrobe, BottomNavItem.Generator, BottomNavItem.Outfits, BottomNavItem.Stats)
-    NavigationBar {
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
+fun GeneratorScreen(
+    generatedOutfit: List<ClothingItem>,
+    onGenerate: (Season, Style, Style?) -> Unit,
+    onSaveOutfit: (List<ClothingItem>) -> Unit
+) {
+    var selectedSeason by remember { mutableStateOf(DataSource.seasons.first()) }
+    var selectedStyle1 by remember { mutableStateOf(DataSource.styles.first()) }
+    var selectedStyle2 by remember { mutableStateOf<Style?>(null) }
 
-        items.forEach { item ->
-            NavigationBarItem(
-                icon = { Icon(item.icon, contentDescription = item.label) },
-                label = { Text(item.label) },
-                selected = currentRoute == item.route,
-                onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.startDestinationId) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-            )
-        }
-    }
-}
-
-@Composable
-fun AppNavHost(navController: NavHostController, viewModel: WardrobeViewModel, modifier: Modifier) {
-    NavHost(navController, startDestination = BottomNavItem.Wardrobe.route, modifier = modifier) {
-        composable(BottomNavItem.Wardrobe.route) {
-            val items by viewModel.allItems.collectAsState()
-            WardrobeScreenContent(
-                items = items,
-                onDeleteItem = viewModel::deleteItem,
-                onToggleAvailability = viewModel::toggleAvailability
-            )
-        }
-        composable(BottomNavItem.Generator.route) {
-            GeneratorScreen(viewModel = viewModel)
-        }
-        composable(BottomNavItem.Outfits.route) {
-            val savedOutfits by viewModel.savedOutfits.collectAsState()
-            OutfitsScreen(
-                savedOutfits = savedOutfits,
-                onMarkAsWorn = viewModel::markOutfitAsWorn,
-                onDeleteOutfit = viewModel::deleteOutfit
-            )
-        }
-        composable(BottomNavItem.Stats.route) {
-            val stats by viewModel.wardrobeStats.collectAsState()
-            StatsScreen(stats = stats)
-        }
-    }
-}
-
-@Composable
-fun StatsScreen(stats: WardrobeStats) {
-    if (stats.top5MostWornItems.isEmpty() && stats.colorDistribution.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No hay suficientes datos para mostrar estadísticas.")
-        }
-        return
-    }
+    var generationAttempted by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        if (stats.top5MostWornItems.isNotEmpty()) {
-            Text("Tus 5 prendas favoritas", style = MaterialTheme.typography.titleLarge)
-            stats.top5MostWornItems.forEach { item ->
-                ClothingCard(item = item, onDeleteItem = null, onToggleAvailability = null, onClick = null)
+        DropdownMenu(
+            label = "Temporada",
+            options = DataSource.seasons.map { it.displayName },
+            selectedOption = selectedSeason.displayName,
+            onOptionSelected = { name -> selectedSeason = DataSource.seasons.find { it.displayName == name }!! }
+        )
+        Spacer(Modifier.height(8.dp))
+        DropdownMenu(
+            label = "Estilo Principal",
+            options = DataSource.styles.map { it.displayName },
+            selectedOption = selectedStyle1.displayName,
+            onOptionSelected = { name -> selectedStyle1 = DataSource.styles.find { it.displayName == name }!! }
+        )
+        Spacer(Modifier.height(8.dp))
+        DropdownMenu(
+            label = "Segundo Estilo (Opcional)",
+            options = listOf("Ninguno") + DataSource.styles.map { it.displayName },
+            selectedOption = selectedStyle2?.displayName ?: "Ninguno",
+            onOptionSelected = { name ->
+                selectedStyle2 = if (name == "Ninguno") null else DataSource.styles.find { it.displayName == name }
             }
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = {
+            generationAttempted = true
+            onGenerate(selectedSeason, selectedStyle1, selectedStyle2)
+        }) {
+            Text("Generar Outfit")
         }
+        Spacer(Modifier.height(16.dp))
 
-        if (stats.colorDistribution.isNotEmpty()) {
-            Text("Tu paleta de colores", style = MaterialTheme.typography.titleLarge)
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    stats.colorDistribution.forEach { (color, count) ->
-                        Text("$color: $count prendas")
+        if (generationAttempted) {
+            if (generatedOutfit.isNotEmpty()) {
+                Text("Conjunto Sugerido", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                ) {
+                    generatedOutfit.forEach { item ->
+                        Card(
+                            modifier = Modifier.weight(1f),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier.padding(4.dp)
+                            ) {
+                                Image(
+                                    painter = rememberAsyncImagePainter(
+                                        model = item.imageUri,
+                                        error = painterResource(id = R.drawable.ic_launcher_background)
+                                    ),
+                                    contentDescription = item.name,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .aspectRatio(1f),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = item.name,
+                                    fontSize = 12.sp,
+                                    maxLines = 2,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        if (stats.styleDistribution.isNotEmpty()) {
-            Text("Tus estilos", style = MaterialTheme.typography.titleLarge)
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    stats.styleDistribution.forEach { (style, count) ->
-                        Text("$style: $count prendas")
-                    }
+                Spacer(Modifier.height(16.dp))
+                Button(onClick = {
+                    onSaveOutfit(generatedOutfit)
+                    generationAttempted = false
+                }) {
+                    Text("Guardar Conjunto")
                 }
+            } else {
+                Text("No se encontraron prendas suficientes para generar un conjunto con esos filtros.")
             }
         }
     }
@@ -219,442 +343,370 @@ fun StatsScreen(stats: WardrobeStats) {
 
 @Composable
 fun OutfitsScreen(
-    savedOutfits: List<OutfitWithItems>,
+    allOutfits: List<OutfitWithItems>,
     onMarkAsWorn: (OutfitWithItems) -> Unit,
-    onDeleteOutfit: (OutfitWithItems) -> Unit
+    onDeleteOutfit: (OutfitWithItems) -> Unit,
+    onEditOutfit: (OutfitWithItems) -> Unit
 ) {
     val context = LocalContext.current
-
     var selectedSeason by remember { mutableStateOf<Season?>(null) }
     var selectedStyle by remember { mutableStateOf<Style?>(null) }
 
-    val filteredOutfits = savedOutfits.filter { outfitWithItems ->
-        val matchesSeason = selectedSeason == null || outfitWithItems.items.any { it.season == selectedSeason }
-        val matchesStyle = selectedStyle == null || outfitWithItems.items.any { it.style == selectedStyle }
-        matchesSeason && matchesStyle
+    val filteredOutfits = allOutfits.filter { outfit ->
+        val hasSeason = selectedSeason == null || outfit.items.any { it.season == selectedSeason }
+        val hasStyle = selectedStyle == null || outfit.items.any { it.style == selectedStyle }
+        hasSeason && hasStyle
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.weight(1f)) {
-                    EnumDropdownMenu(
-                        label = "Temporada",
-                        options = DataSource.seasons,
-                        selectedOption = selectedSeason,
-                        onOptionSelected = { selectedSeason = it },
-                        optionToString = { it.displayName },
-                        allowNull = true
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    EnumDropdownMenu(
-                        label = "Estilo",
-                        options = DataSource.styles,
-                        selectedOption = selectedStyle,
-                        onOptionSelected = { selectedStyle = it },
-                        optionToString = { it.displayName },
-                        allowNull = true
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = {
-                selectedSeason = null
-                selectedStyle = null
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text("Limpiar Filtros")
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(onClick = { context.startActivity(Intent(context, CreateOutfitActivity::class.java)) }) {
+                Icon(Icons.Default.Add, contentDescription = "Crear conjunto")
             }
         }
-
-        Divider()
-
-        if (filteredOutfits.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text(text = "No hay conjuntos que coincidan con los filtros.", textAlign = TextAlign.Center)
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) { innerPadding ->
+        Column(modifier = Modifier.padding(innerPadding)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(filteredOutfits) { outfitWithItems ->
-                    OutfitCard(
-                        outfitWithItems = outfitWithItems,
-                        onMarkAsWorn = { onMarkAsWorn(outfitWithItems) },
-                        onEdit = {
-                            val intent = Intent(context, EditOutfitActivity::class.java).apply {
-                                putExtra("OUTFIT_ID", outfitWithItems.outfit.id)
-                            }
-                            context.startActivity(intent)
-                        },
-                        onDelete = { onDeleteOutfit(outfitWithItems) }
-                    )
+                DropdownMenu(
+                    modifier = Modifier.weight(1f),
+                    label = "Temporada",
+                    options = listOf("Todas") + DataSource.seasons.map { it.displayName },
+                    selectedOption = selectedSeason?.displayName ?: "Todas",
+                    onOptionSelected = { name ->
+                        selectedSeason = if (name == "Todas") null else DataSource.seasons.find { it.displayName == name }
+                    }
+                )
+                DropdownMenu(
+                    modifier = Modifier.weight(1f),
+                    label = "Estilo",
+                    options = listOf("Todas") + DataSource.styles.map { it.displayName },
+                    selectedOption = selectedStyle?.displayName ?: "Todas",
+                    onOptionSelected = { name ->
+                        selectedStyle = if (name == "Todas") null else DataSource.styles.find { it.displayName == name }
+                    }
+                )
+            }
+            if (filteredOutfits.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text("No hay conjuntos guardados que coincidan.")
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(filteredOutfits, key = { it.outfit.id }) { outfit ->
+                        OutfitCard(
+                            outfit = outfit,
+                            onMarkAsWorn = { onMarkAsWorn(outfit) },
+                            onDelete = { onDeleteOutfit(outfit) },
+                            onEdit = { onEditOutfit(outfit) }
+                        )
+                    }
                 }
             }
         }
     }
 }
 
+// --- INICIO DE LA MODIFICACIÓN ---
 @Composable
-fun OutfitCard(
-    outfitWithItems: OutfitWithItems,
-    onMarkAsWorn: () -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit
+fun StatsScreen(
+    stats: WardrobeStats,
+    onResetStats: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    if (showResetDialog) {
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text("Confirmar Reseteo") },
+            text = { Text("¿Estás seguro de que quieres resetear todas las estadísticas de uso? Esta acción no se puede deshacer.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onResetStats()
+                        showResetDialog = false
+                    }
+                ) {
+                    Text("Resetear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Conjunto #${outfitWithItems.outfit.id}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Row {
-                    IconButton(onClick = onEdit) {
-                        Icon(Icons.Default.Edit, contentDescription = "Editar conjunto")
-                    }
-                    IconButton(onClick = onDelete) {
-                        Icon(Icons.Default.Delete, contentDescription = "Eliminar conjunto", tint = MaterialTheme.colorScheme.error)
-                    }
-                }
-            }
-            Text(
-                text = "Usado: ${outfitWithItems.outfit.usageCount} veces",
-                style = MaterialTheme.typography.bodySmall
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            outfitWithItems.items.forEach { item ->
-                ClothingCard(item = item, onDeleteItem = null, onToggleAvailability = null, onClick = null)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = onMarkAsWorn,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Marcar como usado")
-            }
-        }
-    }
-}
-
-@Composable
-fun GeneratorScreen(viewModel: WardrobeViewModel) {
-    var selectedSeason by remember { mutableStateOf<Season?>(null) }
-    var selectedStyle by remember { mutableStateOf<Style?>(null) }
-    val generatedOutfit by viewModel.generatedOutfit.collectAsState()
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState()),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        EnumDropdownMenu(
-            label = "Temporada",
-            options = DataSource.seasons,
-            selectedOption = selectedSeason,
-            onOptionSelected = { selectedSeason = it },
-            optionToString = { it.displayName }
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        EnumDropdownMenu(
-            label = "Estilo",
-            options = DataSource.styles,
-            selectedOption = selectedStyle,
-            onOptionSelected = { selectedStyle = it },
-            optionToString = { it.displayName }
-        )
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(
-            onClick = {
-                if(selectedSeason != null && selectedStyle != null) {
-                    viewModel.generateOutfit(selectedSeason!!, selectedStyle!!)
-                }
-            },
-            enabled = selectedSeason != null && selectedStyle != null,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Generar Outfit")
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        if (generatedOutfit.isNotEmpty()) {
-            Text("Tu outfit:", style = MaterialTheme.typography.titleLarge)
-            Spacer(modifier = Modifier.height(16.dp))
-            generatedOutfit.forEach { item ->
-                ClothingCard(item = item, onDeleteItem = null, onToggleAvailability = null, onClick = null)
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(
-                onClick = { viewModel.saveOutfit(generatedOutfit) },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Guardar Conjunto")
-            }
-        }
-    }
-}
-
-@Composable
-fun WardrobeScreenContent(
-    items: List<ClothingItem>,
-    onDeleteItem: (ClothingItem) -> Unit,
-    onToggleAvailability: (ClothingItem) -> Unit
-) {
-    val context = LocalContext.current
-
-    var selectedCategory by remember { mutableStateOf<Category?>(null) }
-    var selectedSeason by remember { mutableStateOf<Season?>(null) }
-    var selectedStyle by remember { mutableStateOf<Style?>(null) }
-
-    val filteredItems = items.filter { item ->
-        (selectedCategory == null || item.category == selectedCategory) &&
-                (selectedSeason == null || item.season == selectedSeason) &&
-                (selectedStyle == null || item.style == selectedStyle)
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(modifier = Modifier.weight(1f)) {
-                    EnumDropdownMenu(
-                        label = "Categoría",
-                        options = DataSource.categories,
-                        selectedOption = selectedCategory,
-                        onOptionSelected = { selectedCategory = it },
-                        optionToString = { it.displayName },
-                        allowNull = true
-                    )
-                }
-                Box(modifier = Modifier.weight(1f)) {
-                    EnumDropdownMenu(
-                        label = "Temporada",
-                        options = DataSource.seasons,
-                        selectedOption = selectedSeason,
-                        onOptionSelected = { selectedSeason = it },
-                        optionToString = { it.displayName },
-                        allowNull = true
-                    )
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            EnumDropdownMenu(
-                label = "Estilo",
-                options = DataSource.styles,
-                selectedOption = selectedStyle,
-                onOptionSelected = { selectedStyle = it },
-                optionToString = { it.displayName },
-                allowNull = true
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Button(onClick = {
-                selectedCategory = null
-                selectedSeason = null
-                selectedStyle = null
-            }, modifier = Modifier.fillMaxWidth()) {
-                Text("Limpiar Filtros")
+                Text("Estadísticas del Armario", style = MaterialTheme.typography.headlineMedium)
             }
         }
 
-        Divider()
-
-        if (filteredItems.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.Center) {
-                Text(text = "No hay prendas que coincidan con los filtros.", textAlign = TextAlign.Center)
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                items(items = filteredItems, key = { item -> item.id }) { item ->
-                    ClothingCard(
-                        item = item,
-                        onDeleteItem = { onDeleteItem(item) },
-                        onToggleAvailability = { onToggleAvailability(item) },
-                        onClick = {
-                            val intent = Intent(context, AddClothingItemActivity::class.java).apply {
-                                putExtra("ITEM_ID", item.id)
+        item {
+            Card(elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Top 5 Prendas Más Usadas", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    if (stats.top5MostWornItems.isEmpty()) {
+                        Text("Aún no has marcado ninguna prenda como usada.")
+                    } else {
+                        stats.top5MostWornItems.forEach { item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(item.name)
+                                Text("${item.wearCount} usos")
                             }
-                            context.startActivity(intent)
                         }
-                    )
+                    }
                 }
+            }
+        }
+
+        item {
+            Card(elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Distribución por Estilo", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    if (stats.styleDistribution.isEmpty()) {
+                        Text("No hay prendas en el armario.")
+                    } else {
+                        stats.styleDistribution.forEach { (style, count) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(style)
+                                Text("$count prendas")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Card(elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Distribución por Color", style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    if (stats.colorDistribution.isEmpty()) {
+                        Text("No hay prendas en el armario.")
+                    } else {
+                        stats.colorDistribution.forEach { (color, count) ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(color)
+                                Text("$count prendas")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        item {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(
+                onClick = { showResetDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+            ) {
+                Icon(Icons.Default.DeleteForever, contentDescription = "Resetear Estadísticas")
+                Spacer(Modifier.width(8.dp))
+                Text("Resetear Estadísticas")
             }
         }
     }
 }
+// --- FIN DE LA MODIFICACIÓN ---
+
 
 @Composable
 fun ClothingCard(
     item: ClothingItem,
-    onDeleteItem: (() -> Unit)?,
-    onToggleAvailability: ((ClothingItem) -> Unit)?,
-    onClick: (() -> Unit)?
+    onClick: () -> Unit,
+    onDelete: () -> Unit,
+    onToggleAvailability: () -> Unit,
 ) {
-    val alpha = if (item.isAvailable) 1f else 0.5f
-
     Card(
         modifier = Modifier
-            .padding(horizontal = 16.dp, vertical = 8.dp)
             .fillMaxWidth()
-            .alpha(alpha)
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Column {
             Image(
-                painter = rememberAsyncImagePainter(model = if (item.imageUri.isNotEmpty()) Uri.parse(item.imageUri) else null),
+                painter = rememberAsyncImagePainter(
+                    model = item.imageUri,
+                    error = painterResource(id = R.drawable.ic_launcher_background)
+                ),
                 contentDescription = item.name,
-                modifier = Modifier.size(100.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
                 contentScale = ContentScale.Crop
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(16.dp)
-            ) {
-                Text(
-                    text = item.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = item.features,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Text(
-                    text = "Categoría: ${item.category.displayName}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = "Usado: ${item.usageCount} veces",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            if (onToggleAvailability != null) {
-                Switch(
-                    checked = item.isAvailable,
-                    onCheckedChange = { onToggleAvailability(item) }
-                )
-            }
-            if (onDeleteItem != null) {
-                IconButton(onClick = onDeleteItem) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Eliminar prenda",
-                        tint = MaterialTheme.colorScheme.error
+            Column(modifier = Modifier.padding(8.dp)) {
+                Text(item.name, fontWeight = FontWeight.Bold, maxLines = 1)
+                Text(item.features, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (item.isAvailable) "Disponible" else "No disponible",
+                        modifier = Modifier.weight(1f),
+                        fontSize = 12.sp
                     )
+                    Switch(checked = item.isAvailable, onCheckedChange = { onToggleAvailability() })
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+                    }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun <T> EnumDropdownMenu(
-    label: String,
-    options: List<T>,
-    selectedOption: T?,
-    onOptionSelected: (T?) -> Unit,
-    optionToString: (T) -> String,
-    enabled: Boolean = true,
-    allowNull: Boolean = false
+fun OutfitCard(
+    outfit: OutfitWithItems,
+    onMarkAsWorn: () -> Unit,
+    onDelete: () -> Unit,
+    onEdit: () -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = !expanded }
-    ) {
-        OutlinedTextField(
-            value = selectedOption?.let { optionToString(it) } ?: "",
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
-            enabled = enabled
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            if (allowNull) {
-                DropdownMenuItem(
-                    text = { Text("Todos") },
-                    onClick = {
-                        onOptionSelected(null)
-                        expanded = false
+    Card(elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)) {
+        Column(modifier = Modifier.padding(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Conjunto #${outfit.outfit.id}", fontWeight = FontWeight.Bold)
+                Row {
+                    IconButton(onClick = onEdit) {
+                        Icon(Icons.Default.Edit, contentDescription = "Editar")
                     }
-                )
+                    IconButton(onClick = onDelete) {
+                        Icon(Icons.Default.Delete, contentDescription = "Eliminar")
+                    }
+                }
             }
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(optionToString(option)) },
-                    onClick = {
-                        onOptionSelected(option)
-                        expanded = false
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                if (outfit.items.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center){
+                        Text("Conjunto vacío")
                     }
-                )
+                } else {
+                    outfit.items.forEach { item ->
+                        Image(
+                            painter = rememberAsyncImagePainter(
+                                model = item.imageUri,
+                                error = painterResource(id = R.drawable.ic_launcher_background)
+                            ),
+                            contentDescription = item.name,
+                            modifier = Modifier
+                                .weight(1f)
+                                .aspectRatio(1f),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onMarkAsWorn,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Usado ${outfit.outfit.wearCount} veces")
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun DropdownMenu(
-    label: String,
-    options: List<String>,
-    selectedOption: String,
-    onOptionSelected: (String) -> Unit,
-    enabled: Boolean = true
-) {
-    var expanded by remember { mutableStateOf(false) }
 
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { if (enabled) expanded = !expanded }
-    ) {
-        OutlinedTextField(
-            value = selectedOption,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text(label) },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor()
-                .fillMaxWidth(),
-            enabled = enabled
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option) },
-                    onClick = {
-                        onOptionSelected(option)
-                        expanded = false
-                    }
-                )
+@Composable
+fun AppBottomNavigation(navController: NavController) {
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    NavigationBar {
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.Checkroom, contentDescription = "Armario") },
+            label = { Text("Armario") },
+            selected = currentRoute == "wardrobe",
+            onClick = {
+                navController.navigate("wardrobe") {
+                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
             }
-        }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "Generador") },
+            label = { Text("Generador") },
+            selected = currentRoute == "generator",
+            onClick = {
+                navController.navigate("generator") {
+                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.Style, contentDescription = "Conjuntos") },
+            label = { Text("Conjuntos") },
+            selected = currentRoute == "outfits",
+            onClick = {
+                navController.navigate("outfits") {
+                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        )
+        NavigationBarItem(
+            icon = { Icon(Icons.Default.BarChart, contentDescription = "Estadísticas") },
+            label = { Text("Estadísticas") },
+            selected = currentRoute == "stats",
+            onClick = {
+                navController.navigate("stats") {
+                    popUpTo(navController.graph.startDestinationId) { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
+                }
+            }
+        )
     }
 }
 

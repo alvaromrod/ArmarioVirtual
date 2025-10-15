@@ -2,9 +2,6 @@ package com.pep1lo.armariovirtual.data
 
 import kotlinx.serialization.SerialName
 
-// Hemos añadido la anotación @SerialName para que la app sea compatible
-// con los backups JSON de la versión anterior.
-// Ahora, al leer un JSON, sabe que el texto "Exterior" corresponde al enum EXTERIOR.
 enum class Category(val displayName: String) {
     @SerialName("Exterior")
     EXTERIOR("Exterior"),
@@ -27,7 +24,17 @@ enum class Style(val displayName: String) {
     BOHO("Boho"),
 
     @SerialName("Preppy")
-    PREPPY("Preppy")
+    PREPPY("Preppy"),
+
+    // --- VALORES AÑADIDOS ---
+    @SerialName("Sport")
+    SPORT("Sport"),
+
+    @SerialName("Cute")
+    CUTE("Cute"),
+
+    @SerialName("Casual")
+    CASUAL("Casual")
 }
 
 enum class Season(val displayName: String) {

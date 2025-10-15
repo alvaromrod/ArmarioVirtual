@@ -26,11 +26,14 @@ interface ClothingItemDao {
     @Query("SELECT * FROM clothing_items WHERE id = :id")
     fun getItemById(id: Int): Flow<ClothingItem?>
 
-    // --- FUNCIONES DE BACKUP RESTAURADAS ---
+    // --- FUNCIONES DE BACKUP ---
     @Query("SELECT * FROM clothing_items")
     suspend fun getAllItemsForBackup(): List<ClothingItem>
 
     @Query("DELETE FROM clothing_items")
     suspend fun clearAllItems()
-    // --- FIN DE LA CORRECCIÓN ---
+
+    // --- NUEVA FUNCIÓN PARA RESETEAR ESTADÍSTICAS ---
+    @Query("UPDATE clothing_items SET wearCount = 0")
+    suspend fun resetWearCount()
 }

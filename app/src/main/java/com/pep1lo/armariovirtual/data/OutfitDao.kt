@@ -33,7 +33,7 @@ interface OutfitDao {
     @Query("DELETE FROM outfit_clothing_link WHERE outfitId = :outfitId")
     suspend fun deleteLinksForOutfit(outfitId: Int)
 
-    // --- FUNCIONES DE BACKUP RESTAURADAS ---
+    // --- FUNCIONES DE BACKUP ---
     @Query("SELECT * FROM outfits")
     suspend fun getAllOutfitsForBackup(): List<Outfit>
 
@@ -45,5 +45,8 @@ interface OutfitDao {
 
     @Query("DELETE FROM outfit_clothing_link")
     suspend fun clearAllLinks()
-    // --- FIN DE LA CORRECCIÓN ---
+
+    // --- NUEVA FUNCIÓN PARA RESETEAR ESTADÍSTICAS ---
+    @Query("UPDATE outfits SET wearCount = 0, lastWornDate = null")
+    suspend fun resetWearCount()
 }

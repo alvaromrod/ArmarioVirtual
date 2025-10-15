@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">El Armario de Sìlvia</string>
+    <string name="app_name">El Armario de Sílvia</string>
     <string name="title_activity_add_clothing_item">AddClothingItemActivity</string>
     <string name="title_activity_create_outfit">CreateOutfitActivity</string>
     <string name="title_activity_edit_outfit">EditOutfitActivity</string>

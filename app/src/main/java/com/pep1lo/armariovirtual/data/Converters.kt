@@ -2,6 +2,11 @@ package com.pep1lo.armariovirtual.data
 
 import androidx.room.TypeConverter
 
+// SE HAN AÑADIDO LOS IMPORTS PARA ASEGURAR QUE SE USAN LOS ENUMS CORRECTOS
+import com.pep1lo.armariovirtual.data.Category
+import com.pep1lo.armariovirtual.data.Season
+import com.pep1lo.armariovirtual.data.Style
+
 /**
  * Conversores para que Room sepa cómo guardar y leer nuestros Enums en la base de datos.
  * Los guardará como texto (String).

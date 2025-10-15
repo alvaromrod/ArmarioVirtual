@@ -11,46 +11,38 @@ class WardrobeViewModel(
     private val outfitDao: OutfitDao
 ) : ViewModel() {
 
+    // --- State Flows for UI ---
     val allItems: StateFlow<List<ClothingItem>> = clothingItemDao.getAllItems()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = emptyList()
-        )
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allOutfits: StateFlow<List<OutfitWithItems>> = outfitDao.getAllOutfitsWithItems()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _generatedOutfit = MutableStateFlow<List<ClothingItem>>(emptyList())
     val generatedOutfit: StateFlow<List<ClothingItem>> = _generatedOutfit.asStateFlow()
 
-    val savedOutfits: StateFlow<List<OutfitWithItems>> = outfitDao.getAllOutfitsWithItems()
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000L),
-            initialValue = emptyList()
-        )
-
-    val wardrobeStats: StateFlow<WardrobeStats> = allItems.map { items ->
-        val top5 = items.filter { it.usageCount > 0 }.sortedByDescending { it.usageCount }.take(5)
-        val colors = items.groupBy { it.color }.mapValues { it.value.size }
-        // Modificación: Agrupamos por el nombre visible del estilo (Enum)
-        val styles = items.groupBy { it.style.displayName }.mapValues { it.value.size }
-        WardrobeStats(top5, colors, styles)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000L),
-        initialValue = WardrobeStats()
-    )
-
-    private val _currentItem = MutableStateFlow<ClothingItem?>(null)
-    val currentItem: StateFlow<ClothingItem?> = _currentItem.asStateFlow()
-
     private val _currentOutfit = MutableStateFlow<OutfitWithItems?>(null)
     val currentOutfit: StateFlow<OutfitWithItems?> = _currentOutfit.asStateFlow()
 
-    fun getBackupData(): Flow<BackupData> = flow {
-        val items = clothingItemDao.getAllItemsForBackup()
-        val outfits = outfitDao.getAllOutfitsForBackup()
-        val links = outfitDao.getAllLinksForBackup()
-        emit(BackupData(items, outfits, links))
+    private val _editingItem = MutableStateFlow<ClothingItem?>(null)
+    val editingItem: StateFlow<ClothingItem?> = _editingItem.asStateFlow()
+
+    val wardrobeStats: StateFlow<WardrobeStats> = combine(allItems, allOutfits) { items, _ ->
+        WardrobeStats(
+            top5MostWornItems = items.sortedByDescending { it.wearCount }.take(5),
+            colorDistribution = items.groupingBy { it.color }.eachCount(),
+            styleDistribution = items.groupingBy { it.style.displayName }.eachCount()
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), WardrobeStats())
+
+
+    // --- Backup and Restore ---
+    suspend fun getBackupData(): BackupData {
+        return BackupData(
+            clothingItems = clothingItemDao.getAllItemsForBackup(),
+            outfits = outfitDao.getAllOutfitsForBackup(),
+            links = outfitDao.getAllLinksForBackup()
+        )
     }
 
     fun restoreDataFromBackup(backupData: BackupData) {
@@ -58,13 +50,13 @@ class WardrobeViewModel(
             clothingItemDao.clearAllItems()
             outfitDao.clearAllOutfits()
             outfitDao.clearAllLinks()
-
             backupData.clothingItems.forEach { clothingItemDao.insertItem(it) }
             backupData.outfits.forEach { outfitDao.insertOutfit(it) }
             backupData.links.forEach { outfitDao.insertOutfitClothingLink(it) }
         }
     }
 
+    // --- Clothing Item Operations ---
     fun insertItem(item: ClothingItem) {
         viewModelScope.launch {
             clothingItemDao.insertItem(item)
@@ -77,23 +69,61 @@ class WardrobeViewModel(
         }
     }
 
+    fun deleteItem(item: ClothingItem) {
+        viewModelScope.launch {
+            clothingItemDao.deleteItem(item)
+        }
+    }
+
     fun getItemById(id: Int) {
         viewModelScope.launch {
-            clothingItemDao.getItemById(id).collect {
-                _currentItem.value = it
+            _editingItem.value = clothingItemDao.getItemById(id).first()
+        }
+    }
+
+    fun setEditingImageUri(uri: String) {
+        _editingItem.value = _editingItem.value?.copy(imageUri = uri)
+    }
+
+    fun clearEditingItem() {
+        _editingItem.value = null
+    }
+
+    fun toggleAvailability(item: ClothingItem) {
+        viewModelScope.launch {
+            updateItem(item.copy(isAvailable = !item.isAvailable))
+        }
+    }
+
+    // --- Outfit Operations ---
+    fun saveOutfit(items: List<ClothingItem>) {
+        viewModelScope.launch {
+            val outfit = Outfit(lastWornDate = System.currentTimeMillis())
+            val outfitId = outfitDao.insertOutfit(outfit)
+            items.forEach { item ->
+                val link = OutfitClothingLink(outfitId = outfitId.toInt(), clothingItemId = item.id)
+                outfitDao.insertOutfitClothingLink(link)
             }
         }
     }
 
-    fun clearCurrentItem() {
-        _currentItem.value = null
+    fun updateOutfit(outfitId: Int, items: List<ClothingItem>) {
+        viewModelScope.launch {
+            outfitDao.getOutfitWithItemsById(outfitId).first()?.outfit?.let {
+                outfitDao.updateOutfit(it.copy(lastWornDate = System.currentTimeMillis()))
+            }
+            outfitDao.deleteLinksForOutfit(outfitId)
+            items.forEach { item ->
+                val link = OutfitClothingLink(outfitId = outfitId, clothingItemId = item.id)
+                outfitDao.insertOutfitClothingLink(link)
+            }
+        }
     }
+
 
     fun getOutfitById(id: Int) {
         viewModelScope.launch {
-            outfitDao.getOutfitWithItemsById(id).collect {
-                _currentOutfit.value = it
-            }
+            _currentOutfit.value = outfitDao.getOutfitWithItemsById(id).first()
         }
     }
 
@@ -101,129 +131,64 @@ class WardrobeViewModel(
         _currentOutfit.value = null
     }
 
-    fun updateOutfit(outfitId: Int, newItems: List<ClothingItem>) {
+    fun markOutfitAsWorn(outfit: OutfitWithItems) {
         viewModelScope.launch {
-            outfitDao.deleteLinksForOutfit(outfitId)
-            newItems.forEach { item ->
-                val link = OutfitClothingLink(outfitId = outfitId, clothingItemId = item.id)
-                outfitDao.insertOutfitClothingLink(link)
+            outfitDao.updateOutfit(outfit.outfit.copy(wearCount = outfit.outfit.wearCount + 1))
+            outfit.items.forEach { item ->
+                clothingItemDao.updateItem(item.copy(wearCount = item.wearCount + 1))
             }
         }
     }
 
-    fun deleteItem(item: ClothingItem) {
+    fun deleteOutfit(outfit: OutfitWithItems) {
         viewModelScope.launch {
-            clothingItemDao.deleteItem(item)
+            outfitDao.deleteOutfit(outfit.outfit)
         }
     }
 
-    fun deleteOutfit(outfitWithItems: OutfitWithItems) {
-        viewModelScope.launch {
-            outfitDao.deleteOutfit(outfitWithItems.outfit)
-        }
+    // --- Outfit Generator Logic ---
+    fun clearGeneratedOutfit() {
+        _generatedOutfit.value = emptyList()
     }
 
-    fun toggleAvailability(item: ClothingItem) {
-        viewModelScope.launch {
-            val updatedItem = item.copy(isAvailable = !item.isAvailable)
-            clothingItemDao.updateItem(updatedItem)
+    fun generateOutfit(season: Season, style1: Style, style2: Style?) {
+        val availableItems = allItems.value.filter { it.isAvailable && it.season == season }
+        val potentialItems = availableItems.filter {
+            it.style == style1 || it.style == style2 || it.style == Style.BASICO
         }
-    }
 
-    fun saveOutfit(items: List<ClothingItem>) {
-        if (items.isEmpty()) return
-        viewModelScope.launch {
-            val newOutfit = Outfit()
-            val newOutfitId = outfitDao.insertOutfit(newOutfit)
-            items.forEach { item ->
-                val link = OutfitClothingLink(outfitId = newOutfitId.toInt(), clothingItemId = item.id)
-                outfitDao.insertOutfitClothingLink(link)
-            }
-            _generatedOutfit.value = emptyList()
+        val fullBody = potentialItems.find { it.category == Category.COMPLETO }?.let { listOf(it) }
+        val top = potentialItems.filter { it.category == Category.SUPERIOR }
+        val bottom = potentialItems.filter { it.category == Category.INFERIOR }
+        val coat = potentialItems.filter { it.category == Category.EXTERIOR }
+
+        val neutralColors = DataSource.allColors.filter { it.isNeutral }.map { it.name }
+
+        if (fullBody?.isNotEmpty() == true) {
+            _generatedOutfit.value = fullBody + (coat.randomOrNull()?.let { listOf(it) } ?: emptyList())
+            return
         }
-    }
 
-    fun markOutfitAsWorn(outfitWithItems: OutfitWithItems) {
-        viewModelScope.launch {
-            val updatedOutfit = outfitWithItems.outfit.copy(
-                usageCount = outfitWithItems.outfit.usageCount + 1,
-                lastWornDate = System.currentTimeMillis()
-            )
-            outfitDao.updateOutfit(updatedOutfit)
-
-            outfitWithItems.items.forEach { clothingItem ->
-                val updatedItem = clothingItem.copy(
-                    usageCount = clothingItem.usageCount + 1
-                )
-                clothingItemDao.updateItem(updatedItem)
-            }
-        }
-    }
-
-    // --- INICIO DE LA MODIFICACIÓN: La función ahora recibe Enums ---
-    fun generateOutfit(season: Season, style: Style) {
-        viewModelScope.launch {
-            val allClothingItems = allItems.value.filter { it.isAvailable }
-
-            val compatibleStyles = when (style) {
-                Style.BASICO -> listOf(Style.BASICO, Style.PREPPY, Style.BOHO)
-                Style.PREPPY -> listOf(Style.BASICO, Style.PREPPY)
-                Style.BOHO -> listOf(Style.BASICO, Style.BOHO)
-            }
-
-            val seasonsToInclude = when (season) {
-                Season.VERANO -> listOf(Season.VERANO, Season.ENTRETIEMPO)
-                Season.INVIERNO -> listOf(Season.INVIERNO, Season.ENTRETIEMPO)
-                Season.ENTRETIEMPO -> listOf(Season.ENTRETIEMPO)
-            }
-
-            val filteredItems = allClothingItems.filter {
-                it.season in seasonsToInclude && it.style in compatibleStyles
-            }
-
-            val tops = filteredItems.filter { it.category == Category.SUPERIOR }
-            val bottoms = filteredItems.filter { it.category == Category.INFERIOR }
-            val fullBody = filteredItems.filter { it.category == Category.COMPLETO }
-            val shoes = allClothingItems.filter { it.features == "Zapatos" }
-            val coats = allClothingItems.filter { it.category == Category.EXTERIOR }
-            // --- FIN DE LA MODIFICACIÓN ---
-
-            val finalOutfit = mutableListOf<ClothingItem>()
-            if (fullBody.isNotEmpty() && (tops.isEmpty() || bottoms.isEmpty())) {
-                fullBody.randomOrNull()?.let { finalOutfit.add(it) }
+        if (top.isNotEmpty() && bottom.isNotEmpty()) {
+            val selectedBottom = bottom.shuffled().firstOrNull { it.color in neutralColors } ?: bottom.random()
+            val selectedTop = if (selectedBottom.color in neutralColors) {
+                top.random()
             } else {
-                val neutralBottoms = bottoms.filter { it.color in DataSource.neutralColors }
-                val chosenBottom = if (neutralBottoms.isNotEmpty()) neutralBottoms.random() else bottoms.randomOrNull()
-                if (chosenBottom != null) {
-                    finalOutfit.add(chosenBottom)
-                    val chosenTop = if (chosenBottom.color in DataSource.neutralColors) {
-                        tops.randomOrNull()
-                    } else {
-                        val neutralTops = tops.filter { it.color in DataSource.neutralColors }
-                        if (neutralTops.isNotEmpty()) neutralTops.random() else tops.randomOrNull()
-                    }
-                    chosenTop?.let { finalOutfit.add(it) }
-                } else {
-                    tops.randomOrNull()?.let { finalOutfit.add(it) }
-                }
+                top.shuffled().firstOrNull { it.color in neutralColors } ?: top.random()
             }
-            val neutralShoes = shoes.filter { it.color in DataSource.neutralColors }
-            if (neutralShoes.isNotEmpty()) {
-                finalOutfit.add(neutralShoes.random())
-            } else {
-                shoes.randomOrNull()?.let { finalOutfit.add(it) }
-            }
-            // --- INICIO DE LA MODIFICACIÓN: Comparación con Enum ---
-            if ((season == Season.INVIERNO || season == Season.ENTRETIEMPO)) {
-                // --- FIN DE LA MODIFICACIÓN ---
-                val neutralCoats = coats.filter { it.color in DataSource.neutralColors }
-                if (neutralCoats.isNotEmpty()) {
-                    finalOutfit.add(neutralCoats.random())
-                } else {
-                    coats.randomOrNull()?.let { finalOutfit.add(it) }
-                }
-            }
-            _generatedOutfit.value = finalOutfit
+            val selectedCoat = coat.shuffled().firstOrNull { it.color in neutralColors } ?: coat.randomOrNull()
+
+            _generatedOutfit.value = listOfNotNull(selectedTop, selectedBottom, selectedCoat)
+            return
+        }
+        _generatedOutfit.value = emptyList()
+    }
+
+    // --- NUEVA FUNCIÓN PARA RESETEAR ESTADÍSTICAS ---
+    fun resetStats() {
+        viewModelScope.launch {
+            clothingItemDao.resetWearCount()
+            outfitDao.resetWearCount()
         }
     }
 }

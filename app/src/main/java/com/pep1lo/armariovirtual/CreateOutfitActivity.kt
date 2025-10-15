@@ -64,7 +64,7 @@ fun CreateOutfitScreen(
         listOfNotNull(selectedFullBody ?: selectedTop, selectedBottom, selectedCoat, selectedShoes)
     }
 
-    val isSaveEnabled = (selectedTop != null || selectedFullBody != null) && selectedShoes != null
+    val isSaveEnabled = (selectedTop != null || selectedFullBody != null)
 
     Scaffold(
         topBar = { TopAppBar(title = { Text("Crear Conjunto Manualmente") }) },
@@ -125,15 +125,14 @@ fun CreateOutfitScreen(
                 title = "Abrigos y Chaquetas",
                 items = groupedItems[Category.EXTERIOR] ?: emptyList(),
                 selectedItem = selectedCoat,
-                onItemSelected = { item -> selectedCoat = if (selectedCoat?.id == item.id) null else item }
+                onItemSelected = { selectedCoat = if (selectedCoat?.id == it.id) null else it }
             )
             ClothingCategoryRow(
                 title = "Zapatos",
                 items = allItems.filter { it.features == "Zapatos" },
                 selectedItem = selectedShoes,
-                onItemSelected = { item -> selectedShoes = if (selectedShoes?.id == item.id) null else item }
+                onItemSelected = { selectedShoes = if (selectedShoes?.id == it.id) null else it }
             )
         }
     }
 }
-
