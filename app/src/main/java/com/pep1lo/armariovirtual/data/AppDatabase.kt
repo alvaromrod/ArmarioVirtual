@@ -8,10 +8,10 @@ import androidx.room.TypeConverters
 
 @Database(
     entities = [ClothingItem::class, Outfit::class, OutfitClothingLink::class],
-    version = 3, // <-- Incrementamos la versión de la DB por el cambio de tipos
+    version = 3, // DB version incremented due to type changes
     exportSchema = false
 )
-@TypeConverters(Converters::class) // <-- Añadimos la referencia a nuestros conversores
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun clothingItemDao(): ClothingItemDao
@@ -28,8 +28,10 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "wardrobe_database"
                 )
-                    .fallbackToDestructiveMigration()
-                    .build()
+                // NOTE: fallbackToDestructiveMigration will wipe user data on schema changes.
+                // For production, implement a proper migration strategy!
+                .fallbackToDestructiveMigration()
+                .build()
                 INSTANCE = instance
                 instance
             }
