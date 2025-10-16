@@ -163,6 +163,7 @@ class WardrobeViewModel(
     /**
      * Genera un outfit respetando la temporada y el estilo seleccionados.
      * Si allowMixAndMatch es true, relaja el filtrado progresivamente.
+     * Ahora asegura máxima aleatoriedad en cada generación.
      */
     fun generateOutfit(season: Season, style: Style, allowMixAndMatch: Boolean = false) {
         viewModelScope.launch {
@@ -189,22 +190,23 @@ class WardrobeViewModel(
                 }
             }
 
-            val tops = filteredItems.filter { it.category == Category.SUPERIOR }
-            val bottoms = filteredItems.filter { it.category == Category.INFERIOR }
-            val fullBody = filteredItems.filter { it.category == Category.COMPLETO }
-            val coats = filteredItems.filter { it.category == Category.EXTERIOR }
-            val shoes = filteredItems.filter { it.features == "Zapatos" }
+            // Shuffle for maximum randomness
+            val tops = filteredItems.filter { it.category == Category.SUPERIOR }.shuffled()
+            val bottoms = filteredItems.filter { it.category == Category.INFERIOR }.shuffled()
+            val fullBody = filteredItems.filter { it.category == Category.COMPLETO }.shuffled()
+            val coats = filteredItems.filter { it.category == Category.EXTERIOR }.shuffled()
+            val shoes = filteredItems.filter { it.features == "Zapatos" }.shuffled()
 
             val outfit = mutableListOf<ClothingItem>()
             if (fullBody.isNotEmpty()) {
-                outfit.add(fullBody.random())
-                if (coats.isNotEmpty()) outfit.add(coats.random())
+                outfit.add(fullBody.first())
+                if (coats.isNotEmpty()) outfit.add(coats.first())
             } else {
-                if (tops.isNotEmpty()) outfit.add(tops.random())
-                if (bottoms.isNotEmpty()) outfit.add(bottoms.random())
-                if (coats.isNotEmpty()) outfit.add(coats.random())
+                if (tops.isNotEmpty()) outfit.add(tops.first())
+                if (bottoms.isNotEmpty()) outfit.add(bottoms.first())
+                if (coats.isNotEmpty()) outfit.add(coats.first())
             }
-            if (shoes.isNotEmpty()) outfit.add(shoes.random())
+            if (shoes.isNotEmpty()) outfit.add(shoes.first())
 
             _generatedOutfit.value = outfit
         }
