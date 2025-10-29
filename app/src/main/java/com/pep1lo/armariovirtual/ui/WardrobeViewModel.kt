@@ -2,9 +2,28 @@ package com.pep1lo.armariovirtual.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.pep1lo.armariovirtual.data.*
-import kotlinx.coroutines.flow.*
+import com.pep1lo.armariovirtual.data.BackupData
+import com.pep1lo.armariovirtual.data.Category
+import com.pep1lo.armariovirtual.data.ClothingItem
+import com.pep1lo.armariovirtual.data.ClothingItemDao
+import com.pep1lo.armariovirtual.data.Outfit
+import com.pep1lo.armariovirtual.data.OutfitClothingLink
+import com.pep1lo.armariovirtual.data.OutfitDao
+import com.pep1lo.armariovirtual.data.OutfitWithItems
+import com.pep1lo.armariovirtual.data.Season
+import com.pep1lo.armariovirtual.data.Style
+import com.pep1lo.armariovirtual.data.WardrobeStats
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class WardrobeViewModel(
     private val clothingItemDao: ClothingItemDao,
@@ -31,7 +50,6 @@ class WardrobeViewModel(
     val wardrobeStats: StateFlow<WardrobeStats> = allItems.map { items ->
         val top5 = items.filter { it.usageCount > 0 }.sortedByDescending { it.usageCount }.take(5)
         val colors = items.groupBy { it.color }.mapValues { it.value.size }
-        // Modificación: Agrupamos por el nombre visible del estilo (Enum)
         val styles = items.groupBy { it.style.displayName }.mapValues { it.value.size }
         WardrobeStats(top5, colors, styles)
     }.stateIn(
@@ -53,16 +71,20 @@ class WardrobeViewModel(
         emit(BackupData(items, outfits, links))
     }
 
-    fun restoreDataFromBackup(backupData: BackupData) {
-        viewModelScope.launch {
-            clothingItemDao.clearAllItems()
-            outfitDao.clearAllOutfits()
-            outfitDao.clearAllLinks()
+    suspend fun getBackupDataOnce(): BackupData = withContext(Dispatchers.IO) {
+        val items = clothingItemDao.getAllItemsForBackup()
+        val outfits = outfitDao.getAllOutfitsForBackup()
+        val links = outfitDao.getAllLinksForBackup()
+        BackupData(items, outfits, links)
+    }
 
-            backupData.clothingItems.forEach { clothingItemDao.insertItem(it) }
-            backupData.outfits.forEach { outfitDao.insertOutfit(it) }
-            backupData.links.forEach { outfitDao.insertOutfitClothingLink(it) }
-        }
+    suspend fun restoreDataFromBackupOnce(backupData: BackupData) = withContext(Dispatchers.IO) {
+        clothingItemDao.clearAllItems()
+        outfitDao.clearAllOutfits()
+        outfitDao.clearAllLinks()
+        backupData.clothingItems.forEach { clothingItemDao.insertItem(it) }
+        backupData.outfits.forEach { outfitDao.insertOutfit(it) }
+        backupData.links.forEach { outfitDao.insertOutfitClothingLink(it) }
     }
 
     fun insertItem(item: ClothingItem) {
@@ -150,21 +172,13 @@ class WardrobeViewModel(
                 lastWornDate = System.currentTimeMillis()
             )
             outfitDao.updateOutfit(updatedOutfit)
-
             outfitWithItems.items.forEach { clothingItem ->
-                val updatedItem = clothingItem.copy(
-                    usageCount = clothingItem.usageCount + 1
-                )
+                val updatedItem = clothingItem.copy(usageCount = clothingItem.usageCount + 1)
                 clothingItemDao.updateItem(updatedItem)
             }
         }
     }
 
-    /**
-     * Genera un outfit respetando la temporada y el estilo seleccionados.
-     * Si allowMixAndMatch es true, relaja el filtrado progresivamente.
-     * Ahora asegura máxima aleatoriedad en cada generación.
-     */
     fun generateOutfit(season: Season, style: Style, allowMixAndMatch: Boolean = false) {
         viewModelScope.launch {
             val allClothingItems = allItems.value.filter { it.isAvailable }
@@ -176,21 +190,18 @@ class WardrobeViewModel(
                 seasonFilter(item.season) && styleFilter(item.style)
             }
 
-            // Strict: both season and style
             var filteredItems = filterItems({ it == season }, { it == style })
 
-            // Relax filters if needed (Mix & Match)
             if (allowMixAndMatch && filteredItems.size < 2) {
                 filteredItems = filterItems({ it == season }, { _ -> true })
                 if (filteredItems.size < 2) {
                     filteredItems = filterItems({ _ -> true }, { it == style })
                     if (filteredItems.size < 2) {
-                        filteredItems = allClothingItems // fallback: anything available
+                        filteredItems = allClothingItems
                     }
                 }
             }
 
-            // Shuffle for maximum randomness
             val tops = filteredItems.filter { it.category == Category.SUPERIOR }.shuffled()
             val bottoms = filteredItems.filter { it.category == Category.INFERIOR }.shuffled()
             val fullBody = filteredItems.filter { it.category == Category.COMPLETO }.shuffled()
