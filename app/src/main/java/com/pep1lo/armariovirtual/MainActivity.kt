@@ -20,6 +20,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -238,6 +239,7 @@ fun WardrobeScreen(
     }
 }
 
+// REPLACED: Generator screen now uses Scaffold + LazyColumn so content scrolls and the Save button is always visible.
 @Composable
 fun GeneratorScreen(
     generatedOutfit: List<ClothingItem>,
@@ -247,96 +249,132 @@ fun GeneratorScreen(
     var selectedSeason by remember { mutableStateOf(DataSource.seasons.first()) }
     var selectedStyle by remember { mutableStateOf(DataSource.styles.first()) }
     var allowMixAndMatch by remember { mutableStateOf(false) }
-
     var generationAttempted by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        DropdownMenu(
-            label = "Temporada",
-            options = DataSource.seasons.map { it.displayName },
-            selectedOption = selectedSeason.displayName,
-            onOptionSelected = { name -> selectedSeason = DataSource.seasons.find { it.displayName == name }!! }
-        )
-        Spacer(Modifier.height(8.dp))
-        DropdownMenu(
-            label = "Estilo",
-            options = DataSource.styles.map { it.displayName },
-            selectedOption = selectedStyle.displayName,
-            onOptionSelected = { name -> selectedStyle = DataSource.styles.find { it.displayName == name }!! }
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = allowMixAndMatch,
-                onCheckedChange = { allowMixAndMatch = it }
-            )
-            Spacer(Modifier.width(8.dp))
-            Text("Permitir combinar estilos/temporadas")
-        }
-        Spacer(Modifier.height(16.dp))
-        Button(onClick = {
-            generationAttempted = true
-            onGenerate(selectedSeason, selectedStyle, allowMixAndMatch)
-        }) {
-            Text("Generar Outfit")
-        }
-        Spacer(Modifier.height(16.dp))
-
-        if (generationAttempted) {
-            if (generatedOutfit.isNotEmpty()) {
-                Text("Conjunto Sugerido", style = MaterialTheme.typography.headlineSmall)
-                Spacer(Modifier.height(8.dp))
+    Scaffold(
+        bottomBar = {
+            Surface(tonalElevation = 2.dp) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .navigationBarsPadding(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    generatedOutfit.forEach { item ->
-                        Card(
-                            modifier = Modifier.weight(1f),
-                            elevation = CardDefaults.cardElevation(2.dp)
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.padding(4.dp)
-                            ) {
-                                Image(
-                                    painter = rememberAsyncImagePainter(
-                                        model = item.imageUri,
-                                        error = painterResource(id = R.drawable.ic_launcher_background)
-                                    ),
-                                    contentDescription = item.name,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .aspectRatio(1f),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Text(
-                                    text = item.name,
-                                    fontSize = 12.sp,
-                                    maxLines = 2,
-                                    textAlign = TextAlign.Center
-                                )
+                    Button(
+                        onClick = {
+                            if (generatedOutfit.isNotEmpty()) {
+                                onSaveOutfit(generatedOutfit)
+                                generationAttempted = false
                             }
+                        },
+                        enabled = generatedOutfit.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Guardar Conjunto")
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
+        val contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = innerPadding.calculateTopPadding() + 16.dp,
+            bottom = innerPadding.calculateBottomPadding() + 16.dp
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = contentPadding,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item {
+                DropdownMenu(
+                    label = "Temporada",
+                    options = DataSource.seasons.map { it.displayName },
+                    selectedOption = selectedSeason.displayName,
+                    onOptionSelected = { name ->
+                        selectedSeason = DataSource.seasons.first { it.displayName == name }
+                    }
+                )
+            }
+            item {
+                DropdownMenu(
+                    label = "Estilo",
+                    options = DataSource.styles.map { it.displayName },
+                    selectedOption = selectedStyle.displayName,
+                    onOptionSelected = { name ->
+                        selectedStyle = DataSource.styles.first { it.displayName == name }
+                    }
+                )
+            }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = allowMixAndMatch, onCheckedChange = { allowMixAndMatch = it })
+                    Spacer(Modifier.width(8.dp))
+                    Text("Permitir combinar estilos/temporadas")
+                }
+            }
+            item {
+                Button(
+                    onClick = {
+                        generationAttempted = true
+                        onGenerate(selectedSeason, selectedStyle, allowMixAndMatch)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Generar Outfit")
+                }
+            }
+
+            if (generationAttempted && generatedOutfit.isEmpty()) {
+                item {
+                    Text(
+                        "No se encontraron prendas suficientes para generar un conjunto con esos filtros.",
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp)
+                    )
+                }
+            }
+
+            if (generatedOutfit.isNotEmpty()) {
+                item {
+                    Text("Conjunto Sugerido", style = MaterialTheme.typography.headlineSmall)
+                }
+                items(generatedOutfit, key = { it.id }) { item ->
+                    Card(elevation = CardDefaults.cardElevation(2.dp)) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(8.dp)
+                        ) {
+                            Image(
+                                painter = rememberAsyncImagePainter(
+                                    model = item.imageUri,
+                                    error = painterResource(id = R.drawable.ic_launcher_background)
+                                ),
+                                contentDescription = item.name,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(min = 120.dp, max = 260.dp) // prevent single item from overflowing
+                                    .clip(MaterialTheme.shapes.medium),
+                                contentScale = ContentScale.Crop
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = item.name,
+                                fontSize = 14.sp,
+                                maxLines = 2,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
-                Button(onClick = {
-                    onSaveOutfit(generatedOutfit)
-                    generationAttempted = false
-                }) {
-                    Text("Guardar Conjunto")
-                }
-            } else {
-                Text("No se encontraron prendas suficientes para generar un conjunto con esos filtros.")
+                // Keep last card above the bottom bar
+                item { Spacer(Modifier.height(72.dp)) }
             }
         }
     }
@@ -620,7 +658,12 @@ fun OutfitCard(
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (outfit.items.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center){
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Text("Conjunto vacío")
                     }
                 } else {

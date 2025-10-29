@@ -24,11 +24,19 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.random.Random
 
 class WardrobeViewModel(
     private val clothingItemDao: ClothingItemDao,
     private val outfitDao: OutfitDao
 ) : ViewModel() {
+
+    private data class Pools(
+        val tops: List<ClothingItem>,
+        val bottoms: List<ClothingItem>,
+        val full: List<ClothingItem>,
+        val coats: List<ClothingItem>
+    )
 
     val allItems: StateFlow<List<ClothingItem>> = clothingItemDao.getAllItems()
         .stateIn(
@@ -179,47 +187,143 @@ class WardrobeViewModel(
         }
     }
 
+    private enum class Route { FULL_BODY, TWO_PIECE }
+
+    private var lastGeneratedIds: Set<Int> = emptySet()
+
     fun generateOutfit(season: Season, style: Style, allowMixAndMatch: Boolean = false) {
         viewModelScope.launch {
-            val allClothingItems = allItems.value.filter { it.isAvailable }
+            val available = allItems.value.filter { it.isAvailable }
 
             fun filterItems(
-                seasonFilter: (Season) -> Boolean,
-                styleFilter: (Style) -> Boolean
-            ) = allClothingItems.filter { item ->
-                seasonFilter(item.season) && styleFilter(item.style)
+                seasonOk: (Season) -> Boolean,
+                styleOk: (Style) -> Boolean
+            ): List<ClothingItem> = available.filter { i -> seasonOk(i.season) && styleOk(i.style) }
+
+            val strictSeason: (Season) -> Boolean = { it == season }
+            val strictStyle: (Style) -> Boolean = { it == style }
+            val anySeason: (Season) -> Boolean = { true }
+            val anyStyle: (Style) -> Boolean = { true }
+
+            val filterOptions = listOf(
+                Pair(strictSeason, strictStyle),
+                Pair(strictSeason, anyStyle),
+                Pair(anySeason, strictStyle),
+                Pair(anySeason, anyStyle)
+            )
+
+            fun buildPools(items: List<ClothingItem>) = Pools(
+                tops = items.filter { it.category == Category.SUPERIOR },
+                bottoms = items.filter { it.category == Category.INFERIOR },
+                full = items.filter { it.category == Category.COMPLETO },
+                coats = items.filter { it.category == Category.EXTERIOR }
+            )
+
+            fun randomDifferent(list: List<ClothingItem>, exclude: Set<Int>): ClothingItem? {
+                if (list.isEmpty()) return null
+                val nonExcluded = list.filter { it.id !in exclude }
+                return (nonExcluded.ifEmpty { list }).random()
             }
 
-            var filteredItems = filterItems({ it == season }, { it == style })
+            var chosen: List<ClothingItem> = emptyList()
+            val attemptFilters = if (allowMixAndMatch) filterOptions else listOf(filterOptions.first())
+            var found = false
 
-            if (allowMixAndMatch && filteredItems.size < 2) {
-                filteredItems = filterItems({ it == season }, { _ -> true })
-                if (filteredItems.size < 2) {
-                    filteredItems = filterItems({ _ -> true }, { it == style })
-                    if (filteredItems.size < 2) {
-                        filteredItems = allClothingItems
+            outerLoop@ for ((seasonOk, styleOk) in attemptFilters) {
+                val filteredItems = filterItems(seasonOk, styleOk)
+                val pools = buildPools(filteredItems)
+
+                val twoPiecePossible = pools.tops.isNotEmpty() && pools.bottoms.isNotEmpty()
+                val fullBodyPossible = pools.full.isNotEmpty()
+                if (!twoPiecePossible && !fullBodyPossible) continue
+
+                val routes = mutableListOf<Route>()
+                if (twoPiecePossible) routes += Route.TWO_PIECE
+                if (fullBodyPossible) routes += Route.FULL_BODY
+
+                for (attempt in 0 until 12) {
+                    val route = routes.random()
+                    val picks = when (route) {
+                        Route.TWO_PIECE -> {
+                            val top = randomDifferent(pools.tops, lastGeneratedIds)
+                            val bottom = randomDifferent(
+                                pools.bottoms,
+                                lastGeneratedIds + (top?.id ?: -1)
+                            )
+                            if (top != null && bottom != null) {
+                                val base = mutableListOf(top, bottom)
+                                if (season != Season.VERANO && pools.coats.isNotEmpty()) {
+                                    if (Random.nextFloat() < 0.25f) {
+                                        val coat = randomDifferent(
+                                            pools.coats,
+                                            lastGeneratedIds + base.map { it.id }.toSet()
+                                        )
+                                        if (coat != null) base += coat
+                                    }
+                                }
+                                base
+                            } else {
+                                emptyList()
+                            }
+                        }
+                        Route.FULL_BODY -> {
+                            val one = randomDifferent(pools.full, lastGeneratedIds)
+                            if (one != null) {
+                                val base = mutableListOf(one)
+                                if (season != Season.VERANO && pools.coats.isNotEmpty()) {
+                                    if (Random.nextFloat() < 0.2f) {
+                                        val coat = randomDifferent(
+                                            pools.coats,
+                                            lastGeneratedIds + base.map { it.id }.toSet()
+                                        )
+                                        if (coat != null) base += coat
+                                    }
+                                }
+                                base
+                            } else {
+                                emptyList()
+                            }
+                        }
+                    }
+
+                    if (picks.isNotEmpty() && picks.map { it.id }.toSet() != lastGeneratedIds) {
+                        chosen = picks
+                        found = true
+                        break
+                    }
+                }
+
+                if (found) break@outerLoop
+            }
+
+            if (!found) {
+                val anyItems = available
+                val anyFull = anyItems.firstOrNull { it.category == Category.COMPLETO }
+                if (anyFull != null) {
+                    chosen = listOf(anyFull)
+                } else {
+                    val anyTop = anyItems.firstOrNull { it.category == Category.SUPERIOR }
+                    val anyBottom = anyItems.firstOrNull { it.category == Category.INFERIOR && it.id != anyTop?.id }
+                    if (anyTop != null && anyBottom != null) {
+                        chosen = listOf(anyTop, anyBottom)
+                    } else if (anyItems.isNotEmpty()) {
+                        chosen = listOf(anyItems.random())
                     }
                 }
             }
 
-            val tops = filteredItems.filter { it.category == Category.SUPERIOR }.shuffled()
-            val bottoms = filteredItems.filter { it.category == Category.INFERIOR }.shuffled()
-            val fullBody = filteredItems.filter { it.category == Category.COMPLETO }.shuffled()
-            val coats = filteredItems.filter { it.category == Category.EXTERIOR }.shuffled()
-            val shoes = filteredItems.filter { it.features == "Zapatos" }.shuffled()
-
-            val outfit = mutableListOf<ClothingItem>()
-            if (fullBody.isNotEmpty()) {
-                outfit.add(fullBody.first())
-                if (coats.isNotEmpty()) outfit.add(coats.first())
-            } else {
-                if (tops.isNotEmpty()) outfit.add(tops.first())
-                if (bottoms.isNotEmpty()) outfit.add(bottoms.first())
-                if (coats.isNotEmpty()) outfit.add(coats.first())
+            if (chosen.size == 1 && chosen.first().category == Category.SUPERIOR) {
+                val bottomAny = available.firstOrNull { it.category == Category.INFERIOR && it.id != chosen.first().id }
+                if (bottomAny != null) {
+                    chosen = listOf(chosen.first(), bottomAny)
+                } else {
+                    val fullAny = available.firstOrNull { it.category == Category.COMPLETO }
+                    if (fullAny != null) chosen = listOf(fullAny)
+                }
             }
-            if (shoes.isNotEmpty()) outfit.add(shoes.first())
 
-            _generatedOutfit.value = outfit
+            lastGeneratedIds = chosen.map { it.id }.toSet()
+            _generatedOutfit.value = chosen
         }
     }
 }
