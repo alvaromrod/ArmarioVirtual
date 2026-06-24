@@ -227,4 +227,26 @@ class WardrobeViewModel(
             _generatedOutfit.value = finalOutfit
         }
     }
+
+    fun generateOutfitByFormula(formula: String) {
+        viewModelScope.launch {
+            val allClothingItems = allItems.value.filter { it.isAvailable }
+            val parts = formula.split("+")
+            if (parts.size != 2) return@launch
+            val part1 = parts[0].trim()
+            val part2 = parts[1].trim()
+
+            val items1 = allClothingItems.filter { it.features.equals(part1, ignoreCase = true) }
+            val items2 = allClothingItems.filter { it.features.equals(part2, ignoreCase = true) }
+
+            val finalOutfit = mutableListOf<ClothingItem>()
+            val item1 = items1.randomOrNull()
+            val item2 = items2.randomOrNull()
+
+            if (item1 != null) finalOutfit.add(item1)
+            if (item2 != null) finalOutfit.add(item2)
+
+            _generatedOutfit.value = finalOutfit
+        }
+    }
 }

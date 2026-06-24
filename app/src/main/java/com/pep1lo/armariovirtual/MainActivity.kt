@@ -40,7 +40,7 @@ import com.pep1lo.armariovirtual.ui.theme.ArmarioVirtualTheme
 
 sealed class BottomNavItem(val route: String, val icon: ImageVector, val label: String) {
     object Wardrobe : BottomNavItem("wardrobe", Icons.Default.Checkroom, "Armario")
-    object Generator : BottomNavItem("generator", Icons.Default.AutoAwesome, "Generador")
+    object Generator : BottomNavItem("generator", Icons.Default.AutoAwesome, "Formulas")
     object Outfits : BottomNavItem("outfits", Icons.Default.Style, "Conjuntos")
     object Stats : BottomNavItem("stats", Icons.Default.Analytics, "Estadísticas")
 }
@@ -477,8 +477,13 @@ fun OutfitCard(
 
 @Composable
 fun GeneratorScreen(viewModel: WardrobeViewModel) {
-    var selectedSeason by remember { mutableStateOf<Season?>(null) }
-    var selectedStyle by remember { mutableStateOf<Style?>(null) }
+    val formulas = listOf(
+        "Vestido + camiseta",
+        "Top + falda",
+        "Blusa + pantalon",
+        "Camisa + shorts"
+    )
+    var selectedFormula by remember { mutableStateOf(formulas[0]) }
     val generatedOutfit by viewModel.generatedOutfit.collectAsState()
 
     Column(
@@ -488,29 +493,18 @@ fun GeneratorScreen(viewModel: WardrobeViewModel) {
             .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        EnumDropdownMenu(
-            label = "Temporada",
-            options = DataSource.seasons,
-            selectedOption = selectedSeason,
-            onOptionSelected = { selectedSeason = it },
-            optionToString = { it.displayName }
-        )
-        Spacer(Modifier.height(8.dp))
-        EnumDropdownMenu(
-            label = "Estilo",
-            options = DataSource.styles,
-            selectedOption = selectedStyle,
-            onOptionSelected = { selectedStyle = it },
-            optionToString = { it.displayName }
+        DropdownMenu(
+            label = "Fórmula",
+            options = formulas,
+            selectedOption = selectedFormula,
+            onOptionSelected = { selectedFormula = it }
         )
         Spacer(Modifier.height(16.dp))
         Button(
             onClick = {
-                if (selectedSeason != null && selectedStyle != null) {
-                    viewModel.generateOutfit(selectedSeason!!, selectedStyle!!)
-                }
+                viewModel.generateOutfitByFormula(selectedFormula)
             },
-            enabled = selectedSeason != null && selectedStyle != null,
+            enabled = selectedFormula.isNotEmpty(),
             modifier = Modifier.fillMaxWidth()
         ) { Text("Generar Outfit") }
 

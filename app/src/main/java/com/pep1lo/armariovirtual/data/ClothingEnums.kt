@@ -13,7 +13,7 @@ enum class Category(val displayName: String) {
     INFERIOR("Inferior"),
 
     @SerialName("Completo")
-    COMPLETO("Completo")
+    COMPLETO("Completa")
 }
 
 enum class Style(val displayName: String) {

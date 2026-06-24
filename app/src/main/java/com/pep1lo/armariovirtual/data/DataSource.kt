@@ -11,10 +11,10 @@ object DataSource {
     val seasons = Season.values().toList()
 
     val categoryItemMap = mapOf(
-        Category.EXTERIOR to listOf("Abrigo", "Chaqueta", "Americana"),
-        Category.SUPERIOR to listOf("Camisa", "Jersey", "Cardigan", "Top", "Camiseta"),
-        Category.INFERIOR to listOf("Pantalones", "Falda", "Tejanos"),
-        Category.COMPLETO to listOf("Vestido", "Mono")
+        Category.EXTERIOR to listOf("Chaleco", "Jersey"),
+        Category.SUPERIOR to listOf("Top", "Blusa", "Camiseta", "Camisa"),
+        Category.INFERIOR to listOf("Falda", "Pantalon", "Shorts"),
+        Category.COMPLETO to listOf("Vestido")
     )
 
     @Serializable
